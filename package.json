@@ -1,6 +1,6 @@
 {
   "name": "@seed-fe/request",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A powerful and flexible HTTP request library based on Axios",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -46,6 +46,7 @@
   "homepage": "https://github.com/xianghongai/seed-fe-request#readme",
   "packageManager": "pnpm@10.6.5",
   "dependencies": {
+    "@seed-fe/logger": "^1.0.0",
     "axios": "^1.6.7"
   },
   "devDependencies": {
@@ -59,5 +60,10 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

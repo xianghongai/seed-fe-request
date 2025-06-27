@@ -1,3 +1,4 @@
+import logger from '@seed-fe/logger';
 import axios, { type AxiosInstance, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 import type {
   AnyRequestInterceptor,
@@ -49,8 +50,8 @@ function handleRequestInterceptor(instance: AxiosInstance, interceptor: AnyReque
   // 处理函数形式的拦截器
   return instance.interceptors.request.use(
     interceptor as (
-      config: InternalAxiosRequestConfig,
-    ) => InternalAxiosRequestConfig | Promise<InternalAxiosRequestConfig>,
+      config: InternalAxiosRequestConfig
+    ) => InternalAxiosRequestConfig | Promise<InternalAxiosRequestConfig>
   );
 }
 
@@ -76,7 +77,7 @@ function handleResponseInterceptor(instance: AxiosInstance, interceptor: AnyResp
 
   // 处理函数形式的拦截器
   return instance.interceptors.response.use(
-    interceptor as (response: AxiosResponse) => AxiosResponse | Promise<AxiosResponse>,
+    interceptor as (response: AxiosResponse) => AxiosResponse | Promise<AxiosResponse>
   );
 }
 
@@ -86,7 +87,7 @@ function handleResponseInterceptor(instance: AxiosInstance, interceptor: AnyResp
 function addInterceptorsToInstance(
   instance: AxiosInstance,
   config: CustomRequestConfig,
-  isOneTime = false,
+  isOneTime = false
 ): { requestIds: number[]; responseIds: number[] } {
   const requestIds: number[] = [];
   const responseIds: number[] = [];
@@ -150,7 +151,7 @@ export function defineRequestConfig(configs: CustomRequestConfig | CustomRequest
     if (instanceMap.has(instanceName)) {
       if (instanceName === DEFAULT_INSTANCE_NAME && instanceMap.size === 0) {
         // 允许重复定义默认实例，但只有首次生效，提示"默认实例已定义，忽略此次定义"
-        console.warn('Default instance already defined, ignoring this definition');
+        logger.warn('Default instance already defined, ignoring this definition');
         return;
       }
       // 提示"实例已存在，不能重复定义"
@@ -171,7 +172,7 @@ export function defineRequestConfig(configs: CustomRequestConfig | CustomRequest
     // 保存实例
     instanceMap.set(instanceName, instance);
     // 提示"成功定义请求实例"
-    console.log(`Successfully defined request instance: ${String(instanceName)}`);
+    logger.info(`Successfully defined request instance: ${String(instanceName)}`);
   });
 }
 
@@ -222,7 +223,7 @@ export async function request<T = unknown>(config: CustomRequestConfig): Promise
 
     // 获取实例默认配置
     const instanceConfig = [...instanceMap.entries()].find(
-      ([name]) => name === (config.instanceName ?? DEFAULT_INSTANCE_NAME),
+      ([name]) => name === (config.instanceName ?? DEFAULT_INSTANCE_NAME)
     )?.[1]?.defaults as CustomRequestConfig | undefined;
 
     // 合并请求配置和实例配置

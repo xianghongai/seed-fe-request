@@ -16,7 +16,7 @@ export type ErrorHandler = (error: unknown) => unknown;
  * 请求拦截器处理函数
  */
 export type RequestHandler = (
-  config: InternalAxiosRequestConfig,
+  config: InternalAxiosRequestConfig
 ) => InternalAxiosRequestConfig | Promise<InternalAxiosRequestConfig>;
 
 /**
