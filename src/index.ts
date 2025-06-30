@@ -11,6 +11,9 @@ import type {
   ResponseInterceptorObject,
 } from './types';
 
+// 导出所有类型
+export * from './types';
+
 /**
  * 表示拦截器添加失败的常量
  */

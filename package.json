@@ -1,6 +1,6 @@
 {
   "name": "@seed-fe/request",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A powerful and flexible HTTP request library based on Axios",
   "type": "module",
   "main": "./dist/index.cjs",
