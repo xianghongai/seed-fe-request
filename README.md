@@ -11,12 +11,15 @@
 
 ```bash
 # npm
+npm install axios
 npm install @seed-fe/request
 
 # yarn
+yarn add axios
 yarn add @seed-fe/request
 
 # pnpm (推荐)
+pnpm add axios
 pnpm add @seed-fe/request
 ```
 
@@ -64,52 +67,53 @@ export default defaultRequestConfig;
 
 拦截器支持多种配置结构，请参考源码类型定义。
 
-### 创建注册方法
+### 声明配置函数
 
 `src/services/request.ts`
 
 ```typescript
+import type { AxiosRequestConfig } from "axios";
 import httpRequest, { defineRequestConfig, getRequestInstance, type HttpRequest } from '@seed-fe/request';
 import defaultRequestConfig from '@/configs/request-default';
-import otherRequestConfig from '@/configs/request-other';
+import anotherRequestConfig from '@/configs/request-another';
 
 /**
  * <Feature>请求实例
  */
-let otherRequest: HttpRequest;
+let anotherRequestInstance: HttpRequest;
 
 /**
  * 注册请求实例
  */
-export function registerRequest() {
+export function configureRequest() {
   // 全局默认请求实例
   defineRequestConfig(defaultRequestConfig);
 
   // <Feature>请求实例
-  defineRequestConfig(otherRequestConfig);
-
-  otherRequest = getRequestInstance('other');
+  defineRequestConfig(anotherRequestConfig);
 }
 
 // 导出默认实例
 export default httpRequest;
 
 // 导出<Feature>请求实例
-export { otherRequest };
+export function anotherRequest(option: AxiosRequestConfig) {
+  anotherRequestInstance ??= getRequestInstance("AnotherRequestKey");
+  return anotherRequestInstance(option);
+}
 ```
 
 `defineRequestConfig()` 支持多种配置结构，请参考源码类型定义。
-
 
 ### 项目入口文件注册
 
 `src/main.ts`
 
 ```typescript
-import { registerRequest } from '@/services/request';
+import { configureRequest } from '@/services/request';
 
 // 注册请求配置
-registerRequest();
+configureRequest();
 ```
 
 ### 声明业务请求服务
@@ -121,7 +125,10 @@ import httpRequest from '@/services/request';
 
 // 使用实例发送请求
 export async function getFeature() {
-  return await httpRequest.get('/feature');
+  return await httpRequest({
+    url: '/feature',
+    method: 'GET',
+  });
 }
 ```
 
@@ -144,38 +151,11 @@ export default function FeaturesHomePage() {
 }
 ```
 
-## 贡献指南
+### 异常
 
-### 开发
+不要 `try...catch` 请求服务，异常应该由统一的全局拦截器处理。
 
-```bash
-# 安装依赖
-pnpm install
-
-# 开发模式
-pnpm dev
-
-# 构建
-pnpm build
-
-# 测试
-pnpm test
-```
-
-### 发布
-
-项目使用 GitHub Actions 自动发布到 NPM。当你推送新的版本标签（如 `v1.0.1`）时，GitHub Actions 将自动构建并发布包。
-
-发布新版本的步骤：
-
-1. 更新 `package.json` 中的版本号
-2. 提交更改: `git commit -am "chore: bump version to x.x.x"`
-3. 创建新标签: `git tag vx.x.x`
-4. 推送标签: `git push && git push --tags`
-
-GitHub Actions 将自动构建并发布包到 NPM。
-
-> 注意: 你需要在 GitHub 仓库设置中添加 NPM_TOKEN 密钥才能发布到 NPM。
+- [@seed-fe/exception-handler - npm](https://www.npmjs.com/package/@seed-fe/exception-handler)
 
 ## License
 
