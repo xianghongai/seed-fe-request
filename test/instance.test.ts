@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mockAxios, mockAxiosInstance, resetAllMocks } from './mocks';
+import { mockAxios, mockAxiosInstance, resetAllMocks } from './utils/mocks';
 
 // Mock logger
 vi.mock('@seed-fe/logger', () => ({
@@ -43,7 +43,9 @@ describe('实例管理', () => {
       });
 
       const instance = getRequestInstance();
-      expect(instance).toBe(mockAxiosInstance);
+      expect(typeof instance).toBe('function');
+      expect(typeof instance.get).toBe('function');
+      expect(typeof instance.post).toBe('function');
     });
 
     it('应该能够通过DEFAULT_INSTANCE_NAME获取默认实例', () => {
@@ -52,7 +54,9 @@ describe('实例管理', () => {
       });
 
       const instance = getRequestInstance(DEFAULT_INSTANCE_NAME);
-      expect(instance).toBe(mockAxiosInstance);
+      expect(typeof instance).toBe('function');
+      expect(typeof instance.get).toBe('function');
+      expect(typeof instance.post).toBe('function');
     });
 
     it('获取不存在的默认实例应该抛出错误', () => {
@@ -86,7 +90,9 @@ describe('实例管理', () => {
       });
 
       const instance = getRequestInstance(instanceName);
-      expect(instance).toBe(mockAxiosInstance);
+      expect(typeof instance).toBe('function');
+      expect(typeof instance.get).toBe('function');
+      expect(typeof instance.post).toBe('function');
     });
 
     it('应该能够创建多个不同的命名实例', () => {
@@ -138,17 +144,14 @@ describe('实例管理', () => {
       });
 
       const instance = getRequestInstance(instanceName);
-      expect(instance).toBe(mockAxiosInstance);
+      expect(typeof instance).toBe('function');
+      expect(typeof instance.get).toBe('function');
+      expect(typeof instance.post).toBe('function');
     });
 
     it('不同的Symbol应该创建不同的实例', () => {
       const symbol1 = Symbol('test1');
       const symbol2 = Symbol('test2');
-
-      const mockInstance1 = { ...mockAxiosInstance };
-      const mockInstance2 = { ...mockAxiosInstance };
-
-      mockAxios.create.mockReturnValueOnce(mockInstance1).mockReturnValueOnce(mockInstance2);
 
       defineRequestConfig([
         { instanceName: symbol1, baseURL: 'https://test1.com' },
@@ -158,8 +161,8 @@ describe('实例管理', () => {
       const instance1 = getRequestInstance(symbol1);
       const instance2 = getRequestInstance(symbol2);
 
-      expect(instance1).toBe(mockInstance1);
-      expect(instance2).toBe(mockInstance2);
+      expect(typeof instance1).toBe('function');
+      expect(typeof instance2).toBe('function');
       expect(instance1).not.toBe(instance2);
     });
   });

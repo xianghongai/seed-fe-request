@@ -1,13 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ErrorHandler,
-  type RequestHandler,
-  type RequestInterceptorFn,
-  type RequestInterceptorObject,
-  type ResponseHandler,
-  type ResponseInterceptorObject,
+import type {
+  RequestHandler,
+  RequestInterceptorFn,
+  RequestInterceptorObject,
+  ResponseHandler,
+  ResponseInterceptorObject,
 } from '../src/types';
-import { createMockError, createMockResponse, mockAxios, mockAxiosInstance, resetAllMocks } from './mocks';
+import { createMockError, createMockResponse, mockAxios, mockAxiosInstance, resetAllMocks } from './utils/mocks';
 
 // 辅助函数 - 直接在文件中定义
 function createRequestInterceptor(): RequestInterceptorObject {
@@ -40,7 +39,7 @@ vi.mock('@seed-fe/logger', () => ({
 
 import { __clearInstancesForTesting__, defineRequestConfig, request } from '../src/index';
 
-describe('错误处理和边界情况', () => {
+describe('错误处理', () => {
   beforeEach(() => {
     resetAllMocks();
     __clearInstancesForTesting__();

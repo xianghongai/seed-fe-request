@@ -1,161 +1,366 @@
 # @seed-fe/request
 
-基于 Axios 封装的 HTTP 请求库。
+基于 Axios 封装的企业级 HTTP 请求库，支持多实例管理和灵活的拦截器配置。
 
 ## 特性
 
-- 支持多实例管理
-- 灵活的拦截器配置
+- 🚀 基于 Axios，保持原有 API 兼容性
+- 🏗️ 支持多实例管理，灵活配置不同的请求环境
+- 🔧 丰富的拦截器配置选项（函数、对象、元组形式）
+- 📦 TypeScript 支持，完整的类型定义
+- 🛡️ 统一的错误处理机制
+- ⚡ 支持请求级别的配置覆盖
 
 ## 安装
 
 ```bash
-# npm
-npm install axios
-npm install @seed-fe/request
-
-# yarn
-yarn add axios
-yarn add @seed-fe/request
-
-# pnpm (推荐)
-pnpm add axios
-pnpm add @seed-fe/request
+npm install @seed-fe/request axios
 ```
 
-## 使用
+```bash
+yarn add @seed-fe/request axios
+```
 
-建议是分步操作：
+```bash
+pnpm add @seed-fe/request axios
+```
 
-定义请求配置 → 创建注册方法 → 项目入口文件注册 → 声明业务请求服务 → 视图中使用请求服务。
+> 注意：axios 是 peer dependency，需要单独安装
 
-### 定义请求配置
+## 快速开始
 
-`src/configs/request-default/index.ts`
+### 配置实例
 
 ```typescript
-const defaultRequestConfig = {
+import { defineRequestConfig } from '@seed-fe/request';
+
+// 定义默认配置
+defineRequestConfig({
   baseURL: 'https://api.example.com',
   timeout: 5000,
   interceptors: {
     request: {
       onConfig: (config) => {
-        // 添加 Token
         config.headers.Authorization = `Bearer ${getToken()}`;
         return config;
       }
     },
     response: {
-      onConfig: (response) => {
-        // 处理响应数据
-        return response.data;
-      },
-      onError: (error: unknown): Promise<never> => {
-        // 仅处理未认证，其它异常由全局异常模块处理
-
-        // 如果需要处理未认证的逻辑，可以在这里处理
-
-        // 如果不需要处理，直接返回 Promise.reject(error)
+      onConfig: (response) => response.data, // 默认已支持
+      onError: (error) => {
+        console.error('请求失败:', error);
         return Promise.reject(error);
-      },
+      }
     }
   }
-};
-
-export default defaultRequestConfig;
+});
 ```
 
-拦截器支持多种配置结构，请参考源码类型定义。
-
-### 声明配置函数
-
-`src/services/request.ts`
+### 基础使用
 
 ```typescript
-import type { AxiosRequestConfig } from "axios";
-import httpRequest, { defineRequestConfig, getRequestInstance, type HttpRequest } from '@seed-fe/request';
-import defaultRequestConfig from '@/configs/request-default';
-import anotherRequestConfig from '@/configs/request-another';
+import httpRequest from '@seed-fe/request';
 
-/**
- * <Feature>请求实例
- */
-let anotherRequestInstance: HttpRequest;
+// 发送 GET 请求
+const data = await httpRequest.get('/api/users');
 
-/**
- * 注册请求实例
- */
-export function configureRequest() {
-  // 全局默认请求实例
-  defineRequestConfig(defaultRequestConfig);
-
-  // <Feature>请求实例
-  defineRequestConfig(anotherRequestConfig);
-}
-
-// 导出默认实例
-export default httpRequest;
-
-// 导出<Feature>请求实例
-export function anotherRequest(option: AxiosRequestConfig) {
-  anotherRequestInstance ??= getRequestInstance("AnotherRequestKey");
-  return anotherRequestInstance(option);
-}
+// 发送 POST 请求
+const result = await httpRequest.post('/api/users', { name: 'John' });
 ```
 
-`defineRequestConfig()` 支持多种配置结构，请参考源码类型定义。
+## API 参考
 
-### 项目入口文件注册
+### 核心 API
 
-`src/main.ts`
+#### `defineRequestConfig(config)`
+
+注册请求实例配置。
+
+**参数：**
+
+- `config: CustomRequestConfig | CustomRequestConfig[]` - 单个配置或配置数组
+
+**示例：**
 
 ```typescript
-import { configureRequest } from '@/services/request';
+// 单个配置
+defineRequestConfig({
+  baseURL: 'https://api.example.com',
+  timeout: 5000
+});
 
-// 注册请求配置
-configureRequest();
+// 多个配置
+defineRequestConfig([
+  { instanceName: 'api1', baseURL: 'https://api1.example.com' },
+  { instanceName: 'api2', baseURL: 'https://api2.example.com' }
+]);
 ```
 
-### 声明业务请求服务
+#### `getRequestInstance(instanceName?)`
 
-`src/services/feature/index.ts`
+获取指定的请求实例。
+
+**参数：**
+
+- `instanceName?: InstanceName` - 实例名称，默认为默认实例
+
+**返回：**
+
+- `RequestInstance` - 请求实例
+
+**示例：**
 
 ```typescript
-import httpRequest from '@/services/request';
+import { getRequestInstance } from '@seed-fe/request';
 
-// 使用实例发送请求
-export async function getFeature() {
-  return await httpRequest({
-    url: '/feature',
-    method: 'GET',
-  });
+const apiInstance = getRequestInstance('api1');
+const data = await apiInstance.get('/users');
+```
+
+#### `request(config)`
+
+全局请求方法。
+
+**参数：**
+
+- `config: CustomRequestConfig` - 请求配置
+
+**示例：**
+
+```typescript
+import { request } from '@seed-fe/request';
+
+const data = await request({
+  url: '/api/users',
+  method: 'GET',
+  instanceName: 'api1' // 可选，指定使用的实例
+});
+```
+
+### HTTP 方法快捷方式
+
+#### `httpRequest.get(url, config?)`
+
+#### `httpRequest.post(url, data?, config?)`
+
+#### `httpRequest.put(url, data?, config?)`
+
+#### `httpRequest.delete(url, config?)`
+
+#### `httpRequest.patch(url, data?, config?)`
+
+#### `httpRequest.head(url, config?)`
+
+#### `httpRequest.options(url, config?)`
+
+**示例：**
+
+```typescript
+// GET 请求
+const users = await httpRequest.get('/api/users');
+const user = await httpRequest.get('/api/users/1', {
+  params: { include: 'profile' }
+});
+
+// POST 请求
+const newUser = await httpRequest.post('/api/users', {
+  name: 'John',
+  email: 'john@example.com'
+});
+
+// PUT 请求
+const updatedUser = await httpRequest.put('/api/users/1', {
+  name: 'John Doe'
+});
+
+// DELETE 请求
+await httpRequest.delete('/api/users/1');
+```
+
+## 配置选项
+
+### CustomRequestConfig
+
+继承自 `AxiosRequestConfig`，并添加了以下选项：
+
+```typescript
+interface CustomRequestConfig extends AxiosRequestConfig {
+  // 实例名称
+  instanceName?: InstanceName;
+
+  // 是否返回完整响应对象（包含状态码、响应头等）
+  withFullResponse?: boolean;
+
+  // 是否跳过错误处理
+  skipErrorHandler?: boolean;
+
+  // 错误处理配置
+  errorConfig?: {
+    errorHandler?: (error: unknown, options: { config: CustomRequestConfig }) => void;
+  };
+
+  // 拦截器配置
+  interceptors?: {
+    request?: RequestInterceptorConfig;
+    response?: ResponseInterceptorConfig;
+  };
+
+  // 兼容旧版本的拦截器配置
+  requestInterceptors?: RequestInterceptorConfig;
+  responseInterceptors?: ResponseInterceptorConfig;
 }
 ```
 
-### 视图中使用请求服务
+## 拦截器配置
 
-`src/pages/features/index.tsx`
+### 支持的拦截器格式
+
+#### 1. 函数形式
 
 ```typescript
-import { useRequest } from 'ahooks';
-import { Empty, Spin } from 'antd';
-import { getFeature } from '@/services/features';
-
-export default function FeaturesHomePage() {
-  const { data, loading, error } = useRequest(getFeature);
-
-  if (loading) return <Spin />;
-  if (error) return <Empty description="加载数据异常" />;
-
-  return <div>{data}</div>;
+interceptors: {
+  request: (config) => {
+    // 处理请求配置
+    return config;
+  },
+  response: (response) => {
+    // 处理响应数据
+    return response;
+  }
 }
 ```
 
-### 异常
+#### 2. 对象形式
 
-不要 `try...catch` 请求服务，异常应该由统一的全局拦截器处理。
+```typescript
+interceptors: {
+  request: {
+    onConfig: (config) => config,
+    onError: (error) => Promise.reject(error)
+  },
+  response: {
+    onConfig: (response) => response,
+    onError: (error) => Promise.reject(error)
+  }
+}
+```
 
-- [@seed-fe/exception-handler - npm](https://www.npmjs.com/package/@seed-fe/exception-handler)
+#### 3. 元组形式
+
+```typescript
+interceptors: {
+  request: [
+    (config) => config,           // onFulfilled
+    (error) => Promise.reject(error) // onRejected
+  ],
+  response: [
+    (response) => response,
+    (error) => Promise.reject(error)
+  ]
+}
+```
+
+#### 4. 数组形式（多个拦截器）
+
+```typescript
+interceptors: {
+  request: [
+    (config) => config,
+    {
+      onConfig: (config) => config,
+      onError: (error) => Promise.reject(error)
+    },
+    [
+      (config) => config,
+      (error) => Promise.reject(error)
+    ]
+  ]
+}
+```
+
+## 使用示例
+
+### 多实例管理
+
+```typescript
+// 配置多个实例
+defineRequestConfig([
+  {
+    instanceName: 'mainAPI',
+    baseURL: 'https://api.example.com',
+    timeout: 5000
+  },
+  {
+    instanceName: 'authAPI',
+    baseURL: 'https://auth.example.com',
+    timeout: 3000
+  }
+]);
+
+// 使用不同实例
+const users = await request({
+  url: '/users',
+  instanceName: 'mainAPI'
+});
+
+const authInfo = await request({
+  url: '/login',
+  instanceName: 'authAPI'
+});
+```
+
+### 获取完整响应
+
+```typescript
+// 获取完整响应对象
+const response = await httpRequest.get('/api/users', {
+  withFullResponse: true
+});
+
+console.log(response.status);   // 状态码
+console.log(response.headers);  // 响应头
+console.log(response.data);     // 响应数据
+```
+
+### 错误处理
+
+```typescript
+defineRequestConfig({
+  baseURL: 'https://api.example.com',
+  errorConfig: {
+    errorHandler: (error, { config }) => {
+      if (error.response?.status === 401) {
+        // 处理未授权错误
+        redirectToLogin();
+      }
+    }
+  }
+});
+
+// 跳过错误处理的请求
+const data = await httpRequest.get('/api/users', {
+  skipErrorHandler: true
+});
+```
+
+## 类型定义
+
+```typescript
+// 实例名称类型
+type InstanceName = string | symbol;
+
+// 请求实例类型
+interface RequestInstance {
+  <T = unknown>(config: CustomRequestConfig): Promise<T>;
+  get<T = unknown>(url: string, config?: CustomRequestConfig): Promise<T>;
+  post<T = unknown>(url: string, data?: unknown, config?: CustomRequestConfig): Promise<T>;
+  put<T = unknown>(url: string, data?: unknown, config?: CustomRequestConfig): Promise<T>;
+  delete<T = unknown>(url: string, config?: CustomRequestConfig): Promise<T>;
+  patch<T = unknown>(url: string, data?: unknown, config?: CustomRequestConfig): Promise<T>;
+  head<T = unknown>(url: string, config?: CustomRequestConfig): Promise<T>;
+  options<T = unknown>(url: string, config?: CustomRequestConfig): Promise<T>;
+}
+```
 
 ## License
 

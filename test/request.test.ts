@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RequestInterceptorObject, ResponseInterceptorObject } from '../src/types';
-import { createMockResponse, mockAxios, mockAxiosInstance, resetAllMocks } from './mocks';
+import { createMockResponse, mockAxios, mockAxiosInstance, resetAllMocks } from './utils/mocks';
 
 // 辅助函数 - 直接在文件中定义
 function createRequestInterceptor(): RequestInterceptorObject {
@@ -25,7 +25,7 @@ vi.mock('@seed-fe/logger', () => ({
 
 import httpRequest, { __clearInstancesForTesting__, defineRequestConfig, request } from '../src/index';
 
-describe('HTTP方法测试', () => {
+describe('HTTP 方法', () => {
   beforeEach(() => {
     resetAllMocks();
     __clearInstancesForTesting__();
