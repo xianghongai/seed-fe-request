@@ -139,6 +139,8 @@ const data = await request({
 
 ### HTTP 方法快捷方式
 
+在 `request` 函数的基础上添加了便捷方法。
+
 #### `httpRequest.get(url, config?)`
 
 #### `httpRequest.post(url, data?, config?)`
@@ -341,6 +343,21 @@ defineRequestConfig({
 const data = await httpRequest.get('/api/users', {
   skipErrorHandler: true
 });
+```
+
+```typescript
+// 所有错误都以标准的 Promise.reject(Error) 格式抛出
+import { normalizeError } from '@seed-fe/request';
+
+// 请求拦截器错误处理
+const requestInterceptor = {
+  onError: (error: unknown) => normalizeError(error)
+};
+
+// 响应拦截器错误处理
+const responseInterceptor = {
+  onError: (error: unknown) => normalizeError(error)
+};
 ```
 
 ## 类型定义
