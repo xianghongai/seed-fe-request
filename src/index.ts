@@ -1,5 +1,12 @@
 import { DEFAULT_INSTANCE_NAME } from './constant/messages';
-import { clearInstancesForTesting, defineRequestConfig, getRequestInstance } from './core/instance-manager';
+import {
+  clearAllInstances,
+  clearInstance,
+  clearInstancesForTesting,
+  defineRequestConfig,
+  getRequestInstance,
+  hasInstance,
+} from './core/instance-manager';
 import { handleRequestError } from './error/error-handler';
 import type { CustomRequestConfig, HttpRequest } from './types';
 import { addHttpMethodShortcuts } from './utils/http-shortcuts';
@@ -12,6 +19,9 @@ export { DEFAULT_INSTANCE_NAME };
 
 // 导出核心API
 export { defineRequestConfig, getRequestInstance };
+
+// 导出实例管理API
+export { hasInstance, clearInstance, clearAllInstances };
 
 // 导出工具函数
 export { normalizeError } from './utils/request-error';

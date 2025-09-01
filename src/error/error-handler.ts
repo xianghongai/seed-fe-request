@@ -22,10 +22,14 @@ export function setInstanceConfig(instanceName: InstanceName, config: CustomRequ
 }
 
 /**
- * 清理实例配置（仅用于测试）
+ * 清理实例配置（可清除指定实例或所有实例）
  */
-export function clearInstanceConfigs(): void {
-  instanceConfigMap.clear();
+export function clearInstanceConfigs(instanceName?: InstanceName): void {
+  if (instanceName !== undefined) {
+    instanceConfigMap.delete(instanceName);
+  } else {
+    instanceConfigMap.clear();
+  }
 }
 
 /**

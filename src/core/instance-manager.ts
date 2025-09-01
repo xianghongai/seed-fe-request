@@ -39,11 +39,39 @@ export function setRequestInstance(instanceName: InstanceName, instance: Request
 }
 
 /**
- * 清理所有实例映射（仅用于测试）
+ * 检查实例是否存在
  */
-export function clearInstancesForTesting(): void {
+export function hasInstance(instanceName?: InstanceName): boolean {
+  return instanceMap.has(instanceName ?? DEFAULT_INSTANCE_NAME);
+}
+
+/**
+ * 清除指定实例
+ */
+export function clearInstance(instanceName?: InstanceName): boolean {
+  const name = instanceName ?? DEFAULT_INSTANCE_NAME;
+  const deleted = instanceMap.delete(name);
+  if (deleted) {
+    // 同时清除该实例的错误配置
+    clearErrorConfigs(name);
+  }
+  return deleted;
+}
+
+/**
+ * 清除所有实例
+ */
+export function clearAllInstances(): void {
   instanceMap.clear();
   clearErrorConfigs();
+}
+
+/**
+ * 清理所有实例映射（仅用于测试）
+ * @deprecated 使用 clearAllInstances 替代
+ */
+export function clearInstancesForTesting(): void {
+  clearAllInstances();
 }
 
 /**
