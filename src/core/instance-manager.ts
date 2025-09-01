@@ -150,7 +150,10 @@ export function clearInstanceConfigs(instanceName?: InstanceName): void {
 
 /**
  * 注册多个实例，可以是单个配置对象或配置数组
- * NOTE: 不能在声明周期内获取实例，因为有可能实例已初始化，重复初始化会报错
+ * NOTE: 当前设计遵循了：
+ * - 关注点分离：配置定义与实例使用分离 (因为有可能实例已初始化，重复初始化会报错)
+ * - 单一职责：defineRequestConfig 专注配置管理，不承担实例分发职责
+ * - 依赖反转：用户依赖抽象的实例名称，而非具体实例
  */
 export function defineRequestConfig(configs: CustomRequestConfig | CustomRequestConfig[]): void {
   // 转换为数组统一处理
