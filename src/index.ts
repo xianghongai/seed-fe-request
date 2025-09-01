@@ -2,7 +2,6 @@ import { DEFAULT_INSTANCE_NAME } from './constant/messages';
 import {
   clearAllInstances,
   clearInstance,
-  clearInstancesForTesting,
   defineRequestConfig,
   getRequestInstance,
   hasInstance,
@@ -25,9 +24,6 @@ export { hasInstance, clearInstance, clearAllInstances };
 
 // 导出工具函数
 export { normalizeError } from './utils/request-error';
-
-// 导出测试工具（仅用于测试）
-export { clearInstancesForTesting as __clearInstancesForTesting__ };
 
 // 全局 request 便捷方法
 export async function request<T = unknown>(config: CustomRequestConfig): Promise<T> {

@@ -12,12 +12,12 @@ vi.mock('@seed-fe/logger', () => ({
   },
 }));
 
-import { __clearInstancesForTesting__, defineRequestConfig } from '../src/index';
+import { clearAllInstances, defineRequestConfig } from '../src/index';
 
 describe('拦截器', () => {
   beforeEach(() => {
     resetAllMocks();
-    __clearInstancesForTesting__();
+    clearAllInstances();
   });
 
   describe('请求拦截器', () => {

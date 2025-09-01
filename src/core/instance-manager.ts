@@ -1,12 +1,19 @@
+import axios, { type AxiosInstance } from 'axios';
 import { DEFAULT_INSTANCE_NAME, ERROR_MESSAGES } from '../constant/messages';
-import { clearInstanceConfigs as clearErrorConfigs, setInstanceConfig } from '../error/error-handler';
+import { setupInstanceInterceptors } from '../interceptors/interceptor-manager';
 import type { CustomRequestConfig, InstanceName, RequestInstance } from '../types';
-import { initializeInstance } from './request-handler';
+import { mergeConfigs } from '../utils/config-merger';
+import { addHttpMethodShortcuts } from '../utils/http-shortcuts';
 
 /**
  * 实例映射，用于存储定义的增强实例
  */
 const instanceMap: Map<InstanceName, RequestInstance> = new Map();
+
+/**
+ * 实例配置映射，用于存储实例的原始配置（包含错误处理器等）
+ */
+const instanceConfigMap: Map<InstanceName, CustomRequestConfig> = new Map();
 
 /**
  * 验证实例名称，检查是否已存在并处理异常情况
@@ -52,8 +59,8 @@ export function clearInstance(instanceName?: InstanceName): boolean {
   const name = instanceName ?? DEFAULT_INSTANCE_NAME;
   const deleted = instanceMap.delete(name);
   if (deleted) {
-    // 同时清除该实例的错误配置
-    clearErrorConfigs(name);
+    // 同时清除该实例的配置
+    clearInstanceConfigs(name);
   }
   return deleted;
 }
@@ -63,19 +70,87 @@ export function clearInstance(instanceName?: InstanceName): boolean {
  */
 export function clearAllInstances(): void {
   instanceMap.clear();
-  clearErrorConfigs();
+  clearInstanceConfigs();
 }
 
 /**
- * 清理所有实例映射（仅用于测试）
- * @deprecated 使用 clearAllInstances 替代
+ * 创建增强的请求实例，支持便捷方法和 withFullResponse 逻辑
  */
-export function clearInstancesForTesting(): void {
-  clearAllInstances();
+function createEnhancedInstance(axiosInstance: AxiosInstance, instanceName: InstanceName): RequestInstance {
+  const instanceConfig = getInstanceConfig(instanceName);
+
+  const enhancedRequest = async <T = unknown>(config: CustomRequestConfig): Promise<T> => {
+    const { mergedConfig, finalWithFullResponse } = mergeConfigs(instanceConfig, config);
+
+    // 添加一次性拦截器
+    const { requestIds, responseIds } = setupInstanceInterceptors(
+      axiosInstance,
+      { ...config, withFullResponse: finalWithFullResponse },
+      true
+    );
+
+    try {
+      // 发送请求
+      const response = await axiosInstance.request(mergedConfig);
+
+      // 根据最终的 withFullResponse 决定返回内容
+      return finalWithFullResponse ? (response as unknown as T) : (response.data as T);
+    } finally {
+      // 移除一次性拦截器
+      requestIds.forEach((id: number) => axiosInstance.interceptors.request.eject(id));
+      responseIds.forEach((id: number) => axiosInstance.interceptors.response.eject(id));
+    }
+  };
+
+  // 添加便捷方法
+  return addHttpMethodShortcuts(enhancedRequest) as RequestInstance;
+}
+
+/**
+ * 初始化并存储实例
+ */
+export function initializeInstance(instanceName: InstanceName, config: CustomRequestConfig): void {
+  const axiosInstance = axios.create(config);
+
+  // 添加默认响应拦截器（直接传递响应）
+  axiosInstance.interceptors.response.use((response) => response);
+
+  // 添加用户配置的拦截器
+  setupInstanceInterceptors(axiosInstance, config);
+
+  // 创建并存储增强实例
+  const enhancedInstance = createEnhancedInstance(axiosInstance, instanceName);
+  setRequestInstance(instanceName, enhancedInstance);
+}
+
+/**
+ * 获取实例配置
+ */
+export function getInstanceConfig(instanceName: InstanceName): CustomRequestConfig | undefined {
+  return instanceConfigMap.get(instanceName);
+}
+
+/**
+ * 设置实例配置
+ */
+export function setInstanceConfig(instanceName: InstanceName, config: CustomRequestConfig): void {
+  instanceConfigMap.set(instanceName, config);
+}
+
+/**
+ * 清理实例配置（可清除指定实例或所有实例）
+ */
+export function clearInstanceConfigs(instanceName?: InstanceName): void {
+  if (instanceName !== undefined) {
+    instanceConfigMap.delete(instanceName);
+  } else {
+    instanceConfigMap.clear();
+  }
 }
 
 /**
  * 注册多个实例，可以是单个配置对象或配置数组
+ * NOTE: 不能在声明周期内获取实例，因为有可能实例已初始化，重复初始化会报错
  */
 export function defineRequestConfig(configs: CustomRequestConfig | CustomRequestConfig[]): void {
   // 转换为数组统一处理

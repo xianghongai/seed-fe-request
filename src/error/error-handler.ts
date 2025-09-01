@@ -1,36 +1,7 @@
 import { DEFAULT_INSTANCE_NAME } from '../constant/messages';
-import type { CustomRequestConfig, InstanceName } from '../types';
+import { getInstanceConfig } from '../core/instance-manager';
+import type { CustomRequestConfig } from '../types';
 import { resolveWithFullResponse } from '../utils/validators';
-
-/**
- * 实例配置映射，用于存储实例的原始配置（包含错误处理器等）
- */
-const instanceConfigMap: Map<InstanceName, CustomRequestConfig> = new Map();
-
-/**
- * 获取实例配置
- */
-export function getInstanceConfig(instanceName: InstanceName): CustomRequestConfig | undefined {
-  return instanceConfigMap.get(instanceName);
-}
-
-/**
- * 设置实例配置
- */
-export function setInstanceConfig(instanceName: InstanceName, config: CustomRequestConfig): void {
-  instanceConfigMap.set(instanceName, config);
-}
-
-/**
- * 清理实例配置（可清除指定实例或所有实例）
- */
-export function clearInstanceConfigs(instanceName?: InstanceName): void {
-  if (instanceName !== undefined) {
-    instanceConfigMap.delete(instanceName);
-  } else {
-    instanceConfigMap.clear();
-  }
-}
 
 /**
  * 处理请求错误

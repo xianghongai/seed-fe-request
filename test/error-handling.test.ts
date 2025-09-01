@@ -6,7 +6,7 @@ import type {
   ResponseHandler,
   ResponseInterceptorObject,
 } from '../src/types';
-import { createMockError, createMockResponse, mockAxios, mockAxiosInstance, resetAllMocks } from './utils/mocks';
+import { createMockError, createMockResponse, mockAxiosInstance, resetAllMocks } from './utils/mocks';
 
 // 辅助函数 - 直接在文件中定义
 function createRequestInterceptor(): RequestInterceptorObject {
@@ -37,12 +37,12 @@ vi.mock('@seed-fe/logger', () => ({
   },
 }));
 
-import { __clearInstancesForTesting__, defineRequestConfig, request } from '../src/index';
+import { clearAllInstances, defineRequestConfig, request } from '../src/index';
 
 describe('错误处理', () => {
   beforeEach(() => {
     resetAllMocks();
-    __clearInstancesForTesting__();
+    clearAllInstances();
     vi.clearAllMocks();
   });
 

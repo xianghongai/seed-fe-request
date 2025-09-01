@@ -11,12 +11,12 @@ vi.mock('@seed-fe/logger', () => ({
   },
 }));
 
-import { __clearInstancesForTesting__, defineRequestConfig, getRequestInstance, request } from '../src/index';
+import { clearAllInstances, defineRequestConfig, getRequestInstance, request } from '../src/index';
 
 describe('响应数据处理', () => {
   beforeEach(() => {
     resetAllMocks();
-    __clearInstancesForTesting__();
+    clearAllInstances();
   });
 
   describe('全局 request 函数', () => {

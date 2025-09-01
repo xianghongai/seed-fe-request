@@ -11,19 +11,12 @@ vi.mock('@seed-fe/logger', () => ({
   },
 }));
 
-import {
-  __clearInstancesForTesting__,
-  DEFAULT_INSTANCE_NAME,
-  defineRequestConfig,
-  getRequestInstance,
-} from '../src/index';
-
-let instanceMap: Map<any, any>;
+import { clearAllInstances, DEFAULT_INSTANCE_NAME, defineRequestConfig, getRequestInstance } from '../src/index';
 
 describe('实例管理', () => {
   beforeEach(() => {
     resetAllMocks();
-    __clearInstancesForTesting__();
+    clearAllInstances();
   });
 
   describe('默认实例', () => {
