@@ -137,6 +137,68 @@ const data = await request({
 });
 ```
 
+### 实例管理 API
+
+#### `hasInstance(instanceName?)`
+
+检查指定实例是否存在。
+
+**参数：**
+
+- `instanceName?: InstanceName` - 实例名称，默认为默认实例
+
+**返回：**
+
+- `boolean` - 实例是否存在
+
+**示例：**
+
+```typescript
+import { hasInstance } from '@seed-fe/request';
+
+if (hasInstance('api1')) {
+  console.log('api1 实例已存在');
+}
+```
+
+#### `clearInstance(instanceName?)`
+
+清除指定实例及其配置。
+
+**参数：**
+
+- `instanceName?: InstanceName` - 实例名称，默认为默认实例
+
+**返回：**
+
+- `boolean` - 是否成功清除实例
+
+**示例：**
+
+```typescript
+import { clearInstance } from '@seed-fe/request';
+
+// 清除指定实例
+const cleared = clearInstance('api1');
+console.log(cleared ? '实例已清除' : '实例不存在');
+
+// 清除默认实例
+clearInstance();
+```
+
+#### `clearAllInstances()`
+
+清除所有实例及其配置。
+
+**示例：**
+
+```typescript
+import { clearAllInstances } from '@seed-fe/request';
+
+// 清除所有实例
+clearAllInstances();
+```
+
 ### HTTP 方法快捷方式
 
 在 `request` 函数的基础上添加了便捷方法。
