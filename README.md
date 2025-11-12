@@ -386,7 +386,7 @@ console.log(response.headers);  // 响应头
 console.log(response.data);     // 响应数据
 ```
 
-### 错误处理
+### 错误处理（实例级）
 
 ```typescript
 defineRequestConfig({
@@ -405,6 +405,20 @@ defineRequestConfig({
 const data = await httpRequest.get('/api/users', {
   skipErrorHandler: true
 });
+```
+
+要点说明：
+
+- 发生错误将会进入“所在实例”的 `errorHandler`；单次请求可用 `skipErrorHandler` 关闭。
+- 若后端采用 200 + `success=false` 这类协议，请在响应拦截器中主动 throw，使异常统一进入 `errorHandler` (不建议这种 API 设计，推荐**响应体直接是资源数据，没有额外的包装层**，采用 [GitHub REST API](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api?apiVersion=2022-11-28) 或 [Google Resource-oriented design (AIP-121)](https://google.aip.dev/121) 社区最佳实践)。
+
+直接实例示例：
+
+```typescript
+import { getRequestInstance } from '@seed-fe/request';
+
+const alarm = getRequestInstance('alarm');
+await alarm.get('/events'); // 失败时触发 alarm 实例的 errorHandler
 ```
 
 ```typescript

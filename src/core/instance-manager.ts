@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance } from 'axios';
 import { DEFAULT_INSTANCE_NAME, ERROR_MESSAGES } from '../constant/messages';
+import { handleRequestError } from '../error/error-handler';
 import { setupInstanceInterceptors } from '../interceptors/interceptor-manager';
 import type { CustomRequestConfig, InstanceName, RequestInstance } from '../types';
 import { mergeConfigs } from '../utils/config-merger';
@@ -93,8 +94,20 @@ function createEnhancedInstance(axiosInstance: AxiosInstance, instanceName: Inst
       // 发送请求
       const response = await axiosInstance.request(mergedConfig);
 
+      // 业务异常抛出：优先使用请求级 errorThrower，其次实例级
+      const errorThrower = config.errorConfig?.errorThrower ?? instanceConfig?.errorConfig?.errorThrower;
+      if (typeof errorThrower === 'function') {
+        // 传入响应数据，允许用户在 200 场景识别并主动抛错
+        // 若抛错，将在下方 catch 中进入实例级错误编排
+        errorThrower(response.data as unknown);
+      }
+
       // 根据最终的 withFullResponse 决定返回内容
       return finalWithFullResponse ? (response as unknown as T) : (response.data as T);
+    } catch (error) {
+      // 实例级错误编排：确保走各自实例的 errorHandler
+      // 注意：handleRequestError 会抛出错误；此处无需再返回
+      handleRequestError(error, { ...config, instanceName });
     } finally {
       // 移除一次性拦截器
       requestIds.forEach((id: number) => axiosInstance.interceptors.request.eject(id));

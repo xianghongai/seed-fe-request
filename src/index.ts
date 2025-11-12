@@ -6,7 +6,6 @@ import {
   getRequestInstance,
   hasInstance,
 } from './core/instance-manager';
-import { handleRequestError } from './error/error-handler';
 import type { CustomRequestConfig, HttpRequest } from './types';
 import { addHttpMethodShortcuts } from './utils/http-shortcuts';
 
@@ -27,15 +26,11 @@ export { normalizeError } from './utils/request-error';
 
 // 全局 request 便捷方法
 export async function request<T = unknown>(config: CustomRequestConfig): Promise<T> {
-  try {
-    const instanceName = config.instanceName ?? DEFAULT_INSTANCE_NAME;
-    const instance = getRequestInstance(instanceName);
+  const instanceName = config.instanceName ?? DEFAULT_INSTANCE_NAME;
+  const instance = getRequestInstance(instanceName);
 
-    // 直接使用增强实例调用
-    return await instance<T>(config);
-  } catch (error) {
-    return handleRequestError(error, config);
-  }
+  // 直接使用增强实例调用；错误在实例层统一编排
+  return instance<T>({ ...config, instanceName });
 }
 
 // 全局 request 便捷方法
