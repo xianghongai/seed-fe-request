@@ -1,6 +1,7 @@
 import { DEFAULT_INSTANCE_NAME } from '../constant/messages';
+import { getGlobalErrorHandler } from '../core/global-error';
 import { getInstanceConfig } from '../core/instance-manager';
-import type { CustomRequestConfig } from '../types';
+import type { CustomRequestConfig, ErrorContext } from '../types';
 import { resolveWithFullResponse } from '../utils/validators';
 
 /**
@@ -32,6 +33,20 @@ export function handleRequestError(error: unknown, config: CustomRequestConfig):
   } else if (instanceConfig?.errorConfig?.errorHandler) {
     // 其次使用实例级别的 errorHandler
     instanceConfig.errorConfig.errorHandler(error, { config: mergedConfig });
+  } else {
+    // 最后尝试全局共享错误处理
+    const globalHandler = getGlobalErrorHandler();
+    if (typeof globalHandler === 'function') {
+      const normalized = error instanceof Error ? error : new Error(String(error));
+      const ctx: ErrorContext = {
+        config: mergedConfig,
+        instanceName: config.instanceName ?? DEFAULT_INSTANCE_NAME,
+        cause: error,
+        normalized,
+      };
+      // 全局处理函数仅用于副作用（记录/提示），不改变错误抛出行为
+      void globalHandler(normalized, ctx);
+    }
   }
 
   // 注意：errorHandler 是用于副作用处理（如日志记录、用户提示等）

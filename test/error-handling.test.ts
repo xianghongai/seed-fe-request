@@ -47,7 +47,7 @@ describe('错误处理', () => {
   });
 
   describe('错误处理', () => {
-    it('应该支持skipErrorHandler跳过错误处理', async () => {
+    it('应该支持skipErrorPipeline跳过错误处理', async () => {
       defineRequestConfig({ baseURL: 'https://api.example.com' });
 
       const error = createMockError('Request failed', 500);
@@ -56,45 +56,42 @@ describe('错误处理', () => {
       await expect(
         request({
           url: '/test',
-          skipErrorHandler: true,
+          skipErrorPipeline: true,
         })
       ).rejects.toThrow('Request failed');
     });
 
-    it('应该调用请求级别的errorHandler', async () => {
+    it('应该调用请求级别的errorPipeline（单中间件）', async () => {
       defineRequestConfig({ baseURL: 'https://api.example.com' });
 
       const error = createMockError('Request failed', 500);
-      const errorHandler = vi.fn();
+      const errorHandler = vi.fn(async () => {});
       mockAxiosInstance.request.mockRejectedValue(error);
 
       await expect(
         request({
           url: '/test',
-          errorConfig: {
-            errorHandler,
-          },
+          errorPipeline: [errorHandler],
         })
       ).rejects.toThrow('Request failed');
 
-      expect(errorHandler).toHaveBeenCalledWith(error, {
-        config: expect.objectContaining({
-          url: '/test',
-        }),
+      // 新签名：(ctx, next)
+      const [ctxArg] = errorHandler.mock.calls[0];
+      expect(ctxArg).toMatchObject({
+        config: expect.objectContaining({ url: '/test' }),
       });
+      expect(ctxArg.normalized).toBeInstanceOf(Error);
     });
 
-    it('应该调用实例级别的errorHandler', async () => {
+    it('应该调用实例级别的errorPipeline（单中间件）', async () => {
       const error = createMockError('Request failed', 500);
-      const instanceErrorHandler = vi.fn();
+      const instanceErrorHandler = vi.fn(async () => {});
 
       // 重新定义实例以包含错误处理器
       defineRequestConfig({
         instanceName: 'withErrorHandler',
         baseURL: 'https://api.example.com',
-        errorConfig: {
-          errorHandler: instanceErrorHandler,
-        },
+        errorPipeline: [instanceErrorHandler],
       });
 
       mockAxiosInstance.request.mockRejectedValue(error);
@@ -106,25 +103,23 @@ describe('错误处理', () => {
         })
       ).rejects.toThrow('Request failed');
 
-      expect(instanceErrorHandler).toHaveBeenCalledWith(error, {
-        config: expect.objectContaining({
-          url: '/test',
-          instanceName: 'withErrorHandler',
-        }),
+      const [ctxArg2] = instanceErrorHandler.mock.calls[0];
+      expect(ctxArg2).toMatchObject({
+        config: expect.objectContaining({ url: '/test', instanceName: 'withErrorHandler' }),
+        instanceName: 'withErrorHandler',
       });
+      expect(ctxArg2.normalized).toBeInstanceOf(Error);
     });
 
-    it('请求级别的errorHandler应该优先于实例级别', async () => {
+    it('请求级别的errorPipeline应该优先于实例级别', async () => {
       const error = createMockError('Request failed', 500);
-      const requestErrorHandler = vi.fn();
-      const instanceErrorHandler = vi.fn();
+      const requestErrorHandler = vi.fn(async () => {});
+      const instanceErrorHandler = vi.fn(async () => {});
 
       defineRequestConfig({
         instanceName: 'priority',
         baseURL: 'https://api.example.com',
-        errorConfig: {
-          errorHandler: instanceErrorHandler,
-        },
+        errorPipeline: [instanceErrorHandler],
       });
 
       mockAxiosInstance.request.mockRejectedValue(error);
@@ -133,9 +128,7 @@ describe('错误处理', () => {
         request({
           instanceName: 'priority',
           url: '/test',
-          errorConfig: {
-            errorHandler: requestErrorHandler,
-          },
+          errorPipeline: [requestErrorHandler],
         })
       ).rejects.toThrow('Request failed');
 

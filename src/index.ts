@@ -9,8 +9,18 @@ import {
 import type { CustomRequestConfig, HttpRequest } from './types';
 import { addHttpMethodShortcuts } from './utils/http-shortcuts';
 
+// 错误管线（共享级）API 导出
+export {
+  clearGlobalErrorHandler,
+  clearGlobalErrorPipeline,
+  // legacy compatibility exports (alpha shim)
+  setGlobalErrorHandler,
+  setGlobalErrorPipeline,
+} from './core/global-error';
 // 导出所有类型
 export * from './types';
+// ErrorContext helpers (strict TS friendly)
+export { getResponseStatus, hasResponseStatus } from './utils/error-context';
 
 // 导出常量
 export { DEFAULT_INSTANCE_NAME };

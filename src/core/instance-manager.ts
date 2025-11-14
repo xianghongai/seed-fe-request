@@ -1,10 +1,12 @@
 import axios, { type AxiosInstance } from 'axios';
 import { DEFAULT_INSTANCE_NAME, ERROR_MESSAGES } from '../constant/messages';
-import { handleRequestError } from '../error/error-handler';
+import { createErrorContext } from '../error/context';
+import { runErrorPipeline } from '../error/pipeline';
 import { setupInstanceInterceptors } from '../interceptors/interceptor-manager';
-import type { CustomRequestConfig, InstanceName, RequestInstance } from '../types';
+import type { CustomRequestConfig, ErrorMiddleware, InstanceName, RequestInstance } from '../types';
 import { mergeConfigs } from '../utils/config-merger';
 import { addHttpMethodShortcuts } from '../utils/http-shortcuts';
+import { getGlobalErrorPipeline } from './global-error';
 
 /**
  * 实例映射，用于存储定义的增强实例
@@ -105,9 +107,48 @@ function createEnhancedInstance(axiosInstance: AxiosInstance, instanceName: Inst
       // 根据最终的 withFullResponse 决定返回内容
       return finalWithFullResponse ? (response as unknown as T) : (response.data as T);
     } catch (error) {
-      // 实例级错误编排：确保走各自实例的 errorHandler
-      // 注意：handleRequestError 会抛出错误；此处无需再返回
-      handleRequestError(error, { ...config, instanceName });
+      // 构造错误上下文并运行错误管线（请求 → 实例 → 共享）
+      const ctx = createErrorContext(error, { ...config, instanceName }, instanceName);
+      const instanceCfg = getInstanceConfig(instanceName);
+      // Build request-level pipeline with legacy compatibility
+      const requestLayer: ErrorMiddleware[] | undefined = (() => {
+        const list: ErrorMiddleware[] = [];
+        if (config.errorPipeline?.length) list.push(...config.errorPipeline);
+        const legacyRequestHandler = config.errorConfig?.errorHandler as
+          | ((error: unknown, options: { config: CustomRequestConfig }) => void)
+          | undefined;
+        if (legacyRequestHandler) {
+          list.push((ctx) => {
+            legacyRequestHandler(ctx.normalized, { config: ctx.config });
+            // legacy semantics: do not call next()
+          });
+        }
+        return list.length ? list : undefined;
+      })();
+
+      const instanceLayer: ErrorMiddleware[] | undefined = (() => {
+        const list: ErrorMiddleware[] = [];
+        if (instanceCfg?.errorPipeline?.length) list.push(...instanceCfg.errorPipeline);
+        const legacyInstanceHandler = instanceCfg?.errorConfig?.errorHandler as
+          | ((error: unknown, options: { config: CustomRequestConfig }) => void)
+          | undefined;
+        if (legacyInstanceHandler) {
+          list.push((ctx) => {
+            legacyInstanceHandler(ctx.normalized, { config: ctx.config });
+            // legacy semantics: do not call next()
+          });
+        }
+        return list.length ? list : undefined;
+      })();
+
+      const layers = {
+        request: requestLayer,
+        instance: instanceLayer,
+        global: getGlobalErrorPipeline(),
+      } as const;
+      await runErrorPipeline(ctx, layers);
+      // runErrorPipeline 最终会抛错，这里加入 throw 以满足类型系统
+      throw ctx.normalized;
     } finally {
       // 移除一次性拦截器
       requestIds.forEach((id: number) => axiosInstance.interceptors.request.eject(id));

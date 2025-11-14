@@ -10,7 +10,23 @@ export type InstanceName = symbol | string;
 /**
  * 错误处理函数类型
  */
-export type ErrorHandler = (error: unknown) => unknown;
+export type ErrorHandler = (error: unknown) => unknown; // legacy, to be removed in future major
+
+/**
+ * 共享错误处理的上下文信息（最小充分）
+ */
+export interface ErrorContext {
+  config: CustomRequestConfig;
+  instanceName?: InstanceName;
+  cause: unknown;
+  response?: unknown;
+  normalized: Error;
+}
+
+/**
+ * 全局共享错误处理函数类型（不改变现有实例/请求级签名以保持兼容）
+ */
+export type GlobalErrorHandler = (error: unknown, context: ErrorContext) => void | Promise<void>;
 
 /**
  * 请求拦截器处理函数
@@ -79,6 +95,10 @@ export type CustomRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
    */
   skipErrorHandler?: boolean;
   /**
+   * 跳过整条错误中间件管线
+   */
+  skipErrorPipeline?: boolean;
+  /**
    * 是否返回完整响应
    */
   withFullResponse?: boolean;
@@ -99,6 +119,11 @@ export type CustomRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
      */
     errorThrower?: (response: ResponseStructure<unknown>) => void;
   };
+
+  /**
+   * 请求级错误中间件管线（Koa 风格）
+   */
+  errorPipeline?: ErrorMiddleware[];
   /**
    * 拦截器配置，支持多种格式
    * 对象格式: { onConfig, onError }
@@ -146,3 +171,18 @@ export interface HttpRequest {
 export interface RequestInstance extends HttpRequest {
   // 继承HttpRequest的所有属性和方法
 }
+
+/**
+ * 错误处理中间件（Koa 风格）
+ */
+export interface ErrorContext {
+  error: unknown;
+  normalized: Error;
+  config: CustomRequestConfig;
+  instanceName?: InstanceName;
+  response?: unknown;
+  state: Record<string, unknown>;
+}
+
+export type ErrorNext = () => Promise<void>;
+export type ErrorMiddleware = (ctx: ErrorContext, next: ErrorNext) => void | Promise<void>;

@@ -137,68 +137,6 @@ const data = await request({
 });
 ```
 
-### 实例管理 API
-
-#### `hasInstance(instanceName?)`
-
-检查指定实例是否存在。
-
-**参数：**
-
-- `instanceName?: InstanceName` - 实例名称，默认为默认实例
-
-**返回：**
-
-- `boolean` - 实例是否存在
-
-**示例：**
-
-```typescript
-import { hasInstance } from '@seed-fe/request';
-
-if (hasInstance('api1')) {
-  console.log('api1 实例已存在');
-}
-```
-
-#### `clearInstance(instanceName?)`
-
-清除指定实例及其配置。
-
-**参数：**
-
-- `instanceName?: InstanceName` - 实例名称，默认为默认实例
-
-**返回：**
-
-- `boolean` - 是否成功清除实例
-
-**示例：**
-
-```typescript
-import { clearInstance } from '@seed-fe/request';
-
-// 清除指定实例
-const cleared = clearInstance('api1');
-console.log(cleared ? '实例已清除' : '实例不存在');
-
-// 清除默认实例
-clearInstance();
-```
-
-#### `clearAllInstances()`
-
-清除所有实例及其配置。
-
-**示例：**
-
-```typescript
-import { clearAllInstances } from '@seed-fe/request';
-
-// 清除所有实例
-clearAllInstances();
-```
-
 ### HTTP 方法快捷方式
 
 在 `request` 函数的基础上添加了便捷方法。
@@ -386,7 +324,41 @@ console.log(response.headers);  // 响应头
 console.log(response.data);     // 响应数据
 ```
 
-### 错误处理（实例级）
+### 异常处理（Legacy，迁移中）
+
+> 下列内容为旧版 errorHandler 方案示例，为兼容迁移暂时保留；
+> 新项目推荐使用“错误处理（Middleware/next 风格 - alpha）”。详见 MIGRATION-alpha.md。
+
+#### 异常处理（请求级，Legacy）
+
+对单次请求临时指定错误处理器（独立于实例与共享配置）：
+
+```typescript
+import httpRequest, { request } from '@seed-fe/request';
+
+// 使用 httpRequest 便捷方法
+await httpRequest.get('/api/users', {
+  errorConfig: {
+    errorHandler: (error, { config }) => {
+      // 单次请求特化处理（例如弹窗提示）
+      console.warn('请求级失败:', config.url);
+    }
+  }
+});
+
+// 或使用 request 函数
+await request({
+  url: '/api/users/1',
+  method: 'GET',
+  errorConfig: {
+    errorHandler: (error, { config }) => {
+      console.warn('请求级失败:', config.url);
+    }
+  }
+});
+```
+
+#### 异常处理（实例级，Legacy）
 
 ```typescript
 defineRequestConfig({
@@ -401,28 +373,17 @@ defineRequestConfig({
   }
 });
 
-// 跳过错误处理的请求
+// 跳过错误处理的请求（建议使用新版 skipErrorPipeline）
 const data = await httpRequest.get('/api/users', {
-  skipErrorHandler: true
+  skipErrorPipeline: true
 });
 ```
-
-要点说明：
 
 - 发生错误将会进入“所在实例”的 `errorHandler`；单次请求可用 `skipErrorHandler` 关闭。
 - 若后端采用 200 + `success=false` 这类协议，请在响应拦截器中主动 throw，使异常统一进入 `errorHandler` (不建议这种 API 设计，推荐**响应体直接是资源数据，没有额外的包装层**，采用 [GitHub REST API](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api?apiVersion=2022-11-28) 或 [Google Resource-oriented design (AIP-121)](https://google.aip.dev/121) 社区最佳实践)。
 
-直接实例示例：
-
 ```typescript
-import { getRequestInstance } from '@seed-fe/request';
-
-const alarm = getRequestInstance('alarm');
-await alarm.get('/events'); // 失败时触发 alarm 实例的 errorHandler
-```
-
-```typescript
-// 所有错误都以标准的 Promise.reject(Error) 格式抛出
+// 所有错误都应以标准的 Promise.reject(Error) 格式抛出
 import { normalizeError } from '@seed-fe/request';
 
 // 请求拦截器错误处理
@@ -433,6 +394,106 @@ const requestInterceptor = {
 // 响应拦截器错误处理
 const responseInterceptor = {
   onError: (error: unknown) => normalizeError(error)
+};
+```
+
+#### 异常处理（共享级，Legacy）
+
+当你有多个微服务实例，但错误处理策略希望统一时，可以使用共享错误处理：
+
+```typescript
+import { setGlobalErrorHandler, clearGlobalErrorHandler } from '@seed-fe/request';
+
+// 配置共享错误处理（注意不要记录敏感信息）
+setGlobalErrorHandler(async (error, { config, instanceName, normalized }) => {
+  console.warn('请求失败', normalized.message, { url: config.url, instanceName });
+});
+
+// 撤销共享处理
+// clearGlobalErrorHandler();
+```
+
+优先级说明（新管线）：
+
+- 请求级 > 实例级 > 共享级
+- 仅当中间件调用 `await next()` 时才会进入下一环
+- 当 `skipErrorPipeline: true` 时，任何级别都不会执行
+
+## 错误处理（Middleware/next 风格 - alpha）
+
+顺序：请求级 → 实例级 → 共享级。调用 `await next()` 才会进入下一环；未调用 `next` 即在当前层终止。跳过开关：`skipErrorPipeline`。
+
+### 请求级中间件
+
+```ts
+await httpRequest.get('/api/users', {
+  errorPipeline: [
+    async (ctx, next) => {
+      // UI 提示（注意脱敏）
+      console.warn('请求失败:', ctx.normalized.message, ctx.config.url);
+      await next(); // 下探实例/共享
+    },
+  ],
+});
+```
+
+### 实例级中间件（特有错误优先）
+
+```ts
+defineRequestConfig({
+  instanceName: 'svcA',
+  baseURL: '/svcA',
+  errorPipeline: [
+    async (ctx, next) => {
+      if ((ctx as any).response?.status === 409) return; // 命中特有冲突错误终止
+      await next(); // 否则交由共享
+    },
+  ],
+});
+```
+
+### 共享级中间件（统一记录/告警）
+
+```ts
+import { setGlobalErrorPipeline } from '@seed-fe/request';
+
+setGlobalErrorPipeline([
+  async (ctx) => {
+    console.warn('统一记录:', ctx.normalized.message, { url: ctx.config.url, instance: ctx.instanceName });
+  },
+]);
+```
+
+### 跳过整条错误管线
+
+```ts
+await httpRequest.get('/api/users', { skipErrorPipeline: true });
+```
+
+注意：中间件仅用于副作用（记录/告警/提示），最终错误仍以 Promise.reject(Error) 形式抛出；请勿记录敏感信息。
+
+### 辅助函数
+
+为在 TypeScript 严格模式下安全读取 `ctx.response.status`，本库提供了以下 helper（避免 `any` 断言）：
+
+```ts
+import { hasResponseStatus, getResponseStatus, type ErrorMiddleware } from '@seed-fe/request';
+
+// 实例级：命中 409 则终止，未命中继续下探
+export const svcAErrorPipeline: ErrorMiddleware[] = [
+  async (ctx, next) => {
+    if (hasResponseStatus(ctx.response) && ctx.response.status === 409) return;
+    await next();
+  },
+];
+
+// 共享级：统一拦截 401
+const global401: ErrorMiddleware = async (ctx, next) => {
+  if (getResponseStatus(ctx) === 401) {
+    // 统一处理（注意脱敏/不可吞错）；示例：发出容器级 unhandledrejection 等
+    return;
+  }
+  await next();
 };
 ```
 

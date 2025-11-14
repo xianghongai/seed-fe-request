@@ -6,10 +6,13 @@ node_modules
 # Production
 dist
 build
+coverage/
 
 # Misc
 .DS_Store
 *.pem
+.env
+.env.*
 .env.local
 .env.development.local
 .env.test.local
@@ -30,3 +33,6 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# AI Assistant
+.codex
