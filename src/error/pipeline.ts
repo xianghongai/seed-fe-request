@@ -6,7 +6,7 @@ type LayerPipelines = {
   global?: ErrorMiddleware[];
 };
 
-// Compose middlewares in Koa-style. Each middleware receives (ctx, next)
+// 以 Koa 风格组合中间件：每个中间件接收 (ctx, next)
 function compose(middlewares: ErrorMiddleware[]): (ctx: ErrorContext) => Promise<void> {
   return function run(ctx: ErrorContext): Promise<void> {
     let index = -1;
@@ -39,7 +39,7 @@ export async function runErrorPipeline(ctx: ErrorContext, layers: LayerPipelines
   if (layers.global?.length) chain.push(...layers.global);
 
   if (chain.length === 0) {
-    // No handlers configured; just throw
+    // 未配置任何处理器：直接抛出标准化错误
     throw ctx.normalized;
   }
 
@@ -47,8 +47,8 @@ export async function runErrorPipeline(ctx: ErrorContext, layers: LayerPipelines
   try {
     await runner(ctx);
   } catch {
-    // Normalize final outcome regardless of middleware throwing
+    // 无论中间件内部是否抛错，最终都统一抛出标准化错误
   }
-  // Always reject with normalized error; pipeline is for side-effects
+  // 始终以标准化错误拒绝；中间件仅用于副作用（记录/告警/分流）
   throw ctx.normalized;
 }

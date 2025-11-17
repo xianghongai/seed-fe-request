@@ -103,6 +103,11 @@ export type CustomRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
    */
   withFullResponse?: boolean;
   /**
+   * 是否启用共享预设（Shared Preset）
+   * - 实例级默认启用；如需禁用，在实例或请求上将其设为 false
+   */
+  useSharedPreset?: boolean;
+  /**
    * 错误配置
    */
   errorConfig?: {
@@ -145,6 +150,10 @@ export type CustomRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
    * @deprecated 推荐使用 interceptors 代替
    */
   responseInterceptors?: ResponseInterceptorFn[];
+  /**
+   * （可选）请求级共享预设覆盖与合并策略
+   */
+  presetOverrides?: PresetOverrides;
 };
 
 /**
@@ -186,3 +195,59 @@ export interface ErrorContext {
 
 export type ErrorNext = () => Promise<void>;
 export type ErrorMiddleware = (ctx: ErrorContext, next: ErrorNext) => void | Promise<void>;
+
+/**
+ * 共享预设（Shared Preset）相关类型
+ * 说明：本库仅提供“机制”与类型契约，不预置具体业务行为。
+ */
+
+// 共享上下文（只读视图），用于阶段钩子读取运行期的键值参数
+export type PresetContext = Readonly<Record<string, unknown>>;
+
+// 阶段参数（只读视图），供阶段钩子消费
+export type StageParams = Readonly<Record<string, unknown>>;
+
+// 各阶段可用的处理器形态
+export type RequestStageHook = AnyRequestInterceptor;
+export type ResponseStageHook = AnyResponseInterceptor;
+export type ErrorStageHook = ErrorMiddleware;
+
+// 聚合的“阶段处理器”类型（在部分工具类型中作为联合类型使用）
+export type StageHook = RequestStageHook | ResponseStageHook | ErrorStageHook;
+
+// 阶段配置（只读契约）；handlers 支持单个或数组
+export interface StageConfig<THandler = unknown> {
+  enabled?: boolean;
+  params?: StageParams;
+  handlers?: ReadonlyArray<THandler> | THandler;
+}
+
+// 共享预设的顶层形状（只读契约）
+export interface SharedPreset {
+  id?: string;
+  context?: PresetContext;
+  onRequest?: StageConfig<RequestStageHook>;
+  onResponse?: StageConfig<ResponseStageHook>;
+  onError?: StageConfig<ErrorStageHook>;
+}
+
+// 层级覆盖（请求/实例级）允许覆盖 SharedPreset 的子集
+export type PresetOverrides = Partial<{
+  context: Partial<PresetContext>;
+  onRequest: StageConfig<RequestStageHook>;
+  onResponse: StageConfig<ResponseStageHook>;
+  onError: StageConfig<ErrorStageHook>;
+  /** 当为 true 时，handlers 采用“追加”而非“整组覆盖” */
+  appendHandlers: boolean;
+}>;
+
+// 统一错误合同（给调用方消费，技术无关）
+export interface StandardizedError {
+  type: string; // http | network | timeout | cancelled | unknown
+  message: string;
+  status?: number;
+  requestId?: string;
+  cause?: unknown;
+  // 可观测标记：表明该错误已走过标准化路径
+  standardized?: true;
+}

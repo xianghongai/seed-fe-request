@@ -288,7 +288,7 @@ interceptors: {
 // 配置多个实例
 defineRequestConfig([
   {
-    instanceName: 'mainAPI',
+    instanceName: 'userAPI',
     baseURL: 'https://api.example.com',
     timeout: 5000
   },
@@ -299,15 +299,20 @@ defineRequestConfig([
   }
 ]);
 
+// 获取不同实例
+const usersRequest = getRequestInstance('userAPI');
+const authRequest = getRequestInstance('authAPI');
+
 // 使用不同实例
-const users = await request({
+const users = await usersRequest({
   url: '/users',
-  instanceName: 'mainAPI'
+  method: 'GET',
 });
 
-const authInfo = await request({
+const authInfo = await authRequest({
   url: '/login',
-  instanceName: 'authAPI'
+  method: 'POST',
+  data: payload,
 });
 ```
 
@@ -322,6 +327,43 @@ const response = await httpRequest.get('/api/users', {
 console.log(response.status);   // 状态码
 console.log(response.headers);  // 响应头
 console.log(response.data);     // 响应数据
+```
+
+### 共享预设（Shared Preset）与层级覆盖（请求 > 实例 > 共享）
+
+> 本库不预置业务动作（认证/i18n 仅为示例），通过“共享预设 + 阶段钩子”机制在请求/响应/错误三个阶段执行自定义逻辑。
+
+```ts
+import { defineSharedPreset, updateSharedContext, defineRequestConfig, request } from '@seed-fe/request';
+
+// 1) 定义共享预设（示例：请求阶段打标签；错误阶段统一标准化为 Promise.reject(Error)）
+defineSharedPreset({
+  onRequest: {
+    handlers: [
+      (cfg) => {
+        cfg.headers = cfg.headers || {};
+        (cfg.headers as any)['X-App'] = 'demo';
+        return cfg;
+      },
+    ],
+  },
+  onError: { handlers: [] }, // 启用错误阶段：将通过响应 onRejected 注入 normalize
+});
+
+// 2) 定义两个实例（默认启用共享预设），如需禁用，可设置 useSharedPreset: false
+defineRequestConfig({ instanceName: 'svcA', baseURL: '/a' }); // 默认启用
+defineRequestConfig({ instanceName: 'svcB', baseURL: '/b', useSharedPreset: false }); // 显式禁用
+
+// 3) 运行期更新共享上下文（示例：语言），后续请求读取最新值（当次派发快照）
+updateSharedContext({ lang: 'zh-CN' });
+await request({ instanceName: 'svcA', url: '/users' });
+updateSharedContext({ lang: 'en-US' });
+await request({ instanceName: 'svcA', url: '/users' });
+
+// 4) 层级覆盖：请求级 > 实例级 > 共享级
+//   - 临时禁用错误阶段（本次请求不注入 normalize onRejected）
+await request({ instanceName: 'svcB', url: '/files', presetOverrides: { onError: { enabled: false } } });
+
 ```
 
 ### 异常处理（Legacy，迁移中）

@@ -3,10 +3,19 @@ import { DEFAULT_INSTANCE_NAME, ERROR_MESSAGES } from '../constant/messages';
 import { createErrorContext } from '../error/context';
 import { runErrorPipeline } from '../error/pipeline';
 import { setupInstanceInterceptors } from '../interceptors/interceptor-manager';
-import type { CustomRequestConfig, ErrorMiddleware, InstanceName, RequestInstance } from '../types';
-import { mergeConfigs } from '../utils/config-merger';
+import type {
+  AnyRequestInterceptor,
+  AnyResponseInterceptor,
+  CustomRequestConfig,
+  ErrorMiddleware,
+  InstanceName,
+  RequestInstance,
+} from '../types';
+import { mergeConfigs, mergePresetLayers } from '../utils/config-merger';
 import { addHttpMethodShortcuts } from '../utils/http-shortcuts';
+import { computePresetInterceptors } from '../utils/preset-merger';
 import { getGlobalErrorPipeline } from './global-error';
+import { getSharedPreset } from './shared-preset';
 
 /**
  * 实例映射，用于存储定义的增强实例
@@ -85,12 +94,65 @@ function createEnhancedInstance(axiosInstance: AxiosInstance, instanceName: Inst
   const enhancedRequest = async <T = unknown>(config: CustomRequestConfig): Promise<T> => {
     const { mergedConfig, finalWithFullResponse } = mergeConfigs(instanceConfig, config);
 
+    // 预设装配：若实例启用了共享预设，则根据共享预设与实例覆盖计算一次性拦截器
+    const sharedPreset = getSharedPreset();
+    // 实例级共享预设开关：默认启用（仅当显式设置为 false 时关闭）
+    const isSharedPresetEnabledAtInstance = instanceConfig?.useSharedPreset !== false;
+    const applied = !!config.presetOverrides || isSharedPresetEnabledAtInstance;
+    const instancePresetOverrides = instanceConfig?.presetOverrides;
+    const mergedStages = applied
+      ? mergePresetLayers(config.presetOverrides, instancePresetOverrides, sharedPreset)
+      : undefined;
+    const effectivePreset = mergedStages
+      ? ({
+          context: mergedStages.context,
+          onRequest: mergedStages.onRequest,
+          onResponse: mergedStages.onResponse,
+          onError: mergedStages.onError,
+        } as const)
+      : undefined;
+    const presetInterceptors = applied
+      ? computePresetInterceptors(
+          config,
+          instanceConfig,
+          effectivePreset
+            ? {
+                onRequest: effectivePreset.onRequest,
+                onResponse: effectivePreset.onResponse,
+                onError: effectivePreset.onError,
+              }
+            : undefined
+        )
+      : { request: [], response: [] };
+
+    // 合并用户配置与预设产生的拦截器（一次性注册）
+    const mergedOneTime: CustomRequestConfig = {
+      ...config,
+      withFullResponse: finalWithFullResponse,
+      interceptors: {
+        request: (() => {
+          const list: AnyRequestInterceptor[] = [];
+          list.push(...presetInterceptors.request);
+          const req = config.interceptors?.request;
+          if (Array.isArray(req)) list.push(...(req as AnyRequestInterceptor[]));
+          else if (req) list.push(req as AnyRequestInterceptor);
+          return list;
+        })(),
+        response: (() => {
+          const list: AnyResponseInterceptor[] = [];
+          const res = config.interceptors?.response;
+          if (Array.isArray(res)) list.push(...(res as AnyResponseInterceptor[]));
+          else if (res) list.push(res as AnyResponseInterceptor);
+          list.push(...presetInterceptors.response);
+          return list;
+        })(),
+      },
+    };
+
+    // mergedStages 已在上方用于构建一次性拦截器，无需额外副作用调用
+
     // 添加一次性拦截器
-    const { requestIds, responseIds } = setupInstanceInterceptors(
-      axiosInstance,
-      { ...config, withFullResponse: finalWithFullResponse },
-      true
-    );
+    const { requestIds, responseIds } = setupInstanceInterceptors(axiosInstance, mergedOneTime, true);
 
     try {
       // 发送请求
@@ -110,7 +172,7 @@ function createEnhancedInstance(axiosInstance: AxiosInstance, instanceName: Inst
       // 构造错误上下文并运行错误管线（请求 → 实例 → 共享）
       const ctx = createErrorContext(error, { ...config, instanceName }, instanceName);
       const instanceCfg = getInstanceConfig(instanceName);
-      // Build request-level pipeline with legacy compatibility
+      // 构建请求级错误管线（兼容旧 errorHandler）
       const requestLayer: ErrorMiddleware[] | undefined = (() => {
         const list: ErrorMiddleware[] = [];
         if (config.errorPipeline?.length) list.push(...config.errorPipeline);
@@ -120,7 +182,7 @@ function createEnhancedInstance(axiosInstance: AxiosInstance, instanceName: Inst
         if (legacyRequestHandler) {
           list.push((ctx) => {
             legacyRequestHandler(ctx.normalized, { config: ctx.config });
-            // legacy semantics: do not call next()
+            // 兼容旧语义：不调用 next()，在当前层终止
           });
         }
         return list.length ? list : undefined;
@@ -135,7 +197,7 @@ function createEnhancedInstance(axiosInstance: AxiosInstance, instanceName: Inst
         if (legacyInstanceHandler) {
           list.push((ctx) => {
             legacyInstanceHandler(ctx.normalized, { config: ctx.config });
-            // legacy semantics: do not call next()
+            // 兼容旧语义：不调用 next()，在当前层终止
           });
         }
         return list.length ? list : undefined;

@@ -13,7 +13,7 @@ import { addHttpMethodShortcuts } from './utils/http-shortcuts';
 export {
   clearGlobalErrorHandler,
   clearGlobalErrorPipeline,
-  // legacy compatibility exports (alpha shim)
+  // 兼容旧接口（alpha 过渡）
   setGlobalErrorHandler,
   setGlobalErrorPipeline,
 } from './core/global-error';
@@ -31,6 +31,8 @@ export { defineRequestConfig, getRequestInstance };
 // 导出实例管理API
 export { hasInstance, clearInstance, clearAllInstances };
 
+// 共享预设 API 导出（应用开关由 useSharedPreset/presetOverrides 决定）
+export { clearSharedPreset, defineSharedPreset, getSharedPreset, updateSharedContext } from './core/shared-preset';
 // 导出工具函数
 export { normalizeError } from './utils/request-error';
 
