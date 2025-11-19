@@ -15,13 +15,7 @@ export type ErrorHandler = (error: unknown) => unknown; // legacy, to be removed
 /**
  * 共享错误处理的上下文信息（最小充分）
  */
-export interface ErrorContext {
-  config: CustomRequestConfig;
-  instanceName?: InstanceName;
-  cause: unknown;
-  response?: unknown;
-  normalized: Error;
-}
+// 旧版 ErrorContext（含 cause 字段）已移除，统一使用下方新接口（error/state 字段）
 
 /**
  * 全局共享错误处理函数类型（不改变现有实例/请求级签名以保持兼容）
@@ -91,11 +85,13 @@ export type CustomRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
    */
   instanceName?: InstanceName;
   /**
-   * 是否跳过错误处理
+   * 是否跳过错误处理（legacy）
+   * 说明：与 skipErrorPipeline 等价，保留兼容；新代码推荐使用 skipErrorPipeline。
    */
   skipErrorHandler?: boolean;
   /**
-   * 跳过整条错误中间件管线
+   * 跳过整条错误中间件管道
+   * 说明：跳过“请求/实例/全局”三层错误管道；与共享预设 onError 无关。
    */
   skipErrorPipeline?: boolean;
   /**
@@ -126,7 +122,7 @@ export type CustomRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
   };
 
   /**
-   * 请求级错误中间件管线（Koa 风格）
+   * 请求级错误中间件管道（Koa 风格）
    */
   errorPipeline?: ErrorMiddleware[];
   /**
@@ -240,6 +236,13 @@ export type PresetOverrides = Partial<{
   /** 当为 true 时，handlers 采用“追加”而非“整组覆盖” */
   appendHandlers: boolean;
 }>;
+
+/**
+ * 重要说明：
+ * - presetOverrides.onError.enabled 仅影响“共享预设阶段”是否向响应拦截器追加一个 onRejected；
+ *   它不会禁用或跳过“请求/实例/全局”的错误管道。
+ * - 若要在某个请求上完全不执行错误管道（请求/实例/全局），请使用 config.skipErrorPipeline（或 legacy: skipErrorHandler）。
+ */
 
 // 统一错误合同（给调用方消费，技术无关）
 export interface StandardizedError {

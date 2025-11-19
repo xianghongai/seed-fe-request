@@ -1,17 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RequestInterceptorObject, ResponseInterceptorObject } from '../src/types';
 import { createMockResponse, mockAxiosInstance, resetAllMocks } from './utils/mocks';
 
 // 辅助函数 - 直接在文件中定义
-function createRequestInterceptor(): RequestInterceptorObject {
-  const requestHandler = vi.fn((config) => config);
-  return { onConfig: requestHandler };
-}
-
-function createResponseInterceptor(): ResponseInterceptorObject {
-  const responseHandler = vi.fn((response) => response);
-  return { onConfig: responseHandler };
-}
 
 // Mock logger
 vi.mock('@seed-fe/logger', () => ({
@@ -214,14 +204,8 @@ describe('HTTP 方法', () => {
     });
   });
 
-  describe('一次性拦截器', () => {
-    it('应该添加和移除一次性请求拦截器', async () => {
-      // 创建一个符合类型的拦截器对象
-      const requestInterceptor = createRequestInterceptor();
-      const interceptorId = 123;
-
-      mockAxiosInstance.interceptors.request.use.mockReturnValue(interceptorId);
-
+  describe('请求级拦截器（手动链）', () => {
+    it('请求级请求拦截器通过手动链生效（不注册到 axios）', async () => {
       const mockData = { message: 'success' };
       const mockResponse = createMockResponse(mockData);
       mockAxiosInstance.request.mockResolvedValue(mockResponse);
@@ -229,70 +213,61 @@ describe('HTTP 方法', () => {
       await request({
         url: '/test',
         interceptors: {
-          request: requestInterceptor,
-        },
-      });
-
-      expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledWith(
-        expect.any(Function), // onConfig
-        expect.any(Function) // onError
-      );
-      expect(mockAxiosInstance.interceptors.request.eject).toHaveBeenCalledWith(interceptorId);
-    });
-
-    it('应该添加和移除一次性响应拦截器', async () => {
-      // 创建一个符合类型的拦截器对象
-      const responseInterceptor = createResponseInterceptor();
-      const interceptorId = 456;
-
-      mockAxiosInstance.interceptors.response.use.mockReturnValue(interceptorId);
-
-      const mockData = { message: 'success' };
-      const mockResponse = createMockResponse(mockData);
-      mockAxiosInstance.request.mockResolvedValue(mockResponse);
-
-      await request({
-        url: '/test',
-        interceptors: {
-          response: responseInterceptor,
-        },
-      });
-
-      expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalledWith(
-        expect.any(Function), // onConfig
-        expect.any(Function) // onError
-      );
-      expect(mockAxiosInstance.interceptors.response.eject).toHaveBeenCalledWith(interceptorId);
-    });
-
-    it('即使请求失败也应该移除一次性拦截器', async () => {
-      // 创建符合类型的拦截器对象
-      const requestInterceptor = createRequestInterceptor();
-      const responseInterceptor = createResponseInterceptor();
-      const requestId = 123;
-      const responseId = 456;
-
-      mockAxiosInstance.interceptors.request.use.mockReturnValue(requestId);
-      mockAxiosInstance.interceptors.response.use.mockReturnValue(responseId);
-
-      const error = new Error('Request failed');
-      mockAxiosInstance.request.mockRejectedValue(error);
-
-      try {
-        await request({
-          url: '/test',
-          interceptors: {
-            request: requestInterceptor,
-            response: responseInterceptor,
+          request: (cfg) => {
+            cfg.headers = cfg.headers || {};
+            (cfg.headers as any)['X-Req'] = '1';
+            return cfg;
           },
-          skipErrorHandler: true,
-        });
-      } catch {
-        // 忽略错误
-      }
+        },
+      });
 
-      expect(mockAxiosInstance.interceptors.request.eject).toHaveBeenCalledWith(requestId);
-      expect(mockAxiosInstance.interceptors.response.eject).toHaveBeenCalledWith(responseId);
+      // 不会向 axios 注册一次性拦截器
+      expect(mockAxiosInstance.interceptors.request.use).not.toHaveBeenCalled();
+      // 但最终请求配置应包含拦截器效果
+      const call = (mockAxiosInstance.request as any).mock.calls[0][0];
+      expect(call.headers['X-Req']).toBe('1');
+    });
+
+    it('请求级响应拦截器通过手动链生效（不注册到 axios）', async () => {
+      const mockData = { message: 'success' };
+      const mockResponse = createMockResponse(mockData);
+      mockAxiosInstance.request.mockResolvedValue(mockResponse);
+
+      const base = mockAxiosInstance.interceptors.response.use.mock.calls.length;
+
+      const result = await request({
+        url: '/test',
+        interceptors: {
+          response: (resp) => {
+            (resp.data as any).message = 'patched';
+            return resp;
+          },
+        },
+      });
+
+      expect(mockAxiosInstance.interceptors.response.use.mock.calls.length).toBe(base);
+      expect(result).toEqual({ message: 'patched' });
+    });
+
+    it('响应 onRejected 可恢复', async () => {
+      const mockData = { message: 'x' };
+      const mockResponse = createMockResponse(mockData);
+      mockAxiosInstance.request.mockResolvedValue(mockResponse);
+
+      const result = await request({
+        url: '/test',
+        interceptors: {
+          response: [
+            () => {
+              throw new Error('broken');
+            },
+            // 恢复为一个可用响应
+            (_err) => mockResponse,
+          ],
+        },
+      });
+
+      expect(result).toEqual({ message: 'x' });
     });
   });
 

@@ -1,0 +1,25 @@
+upgrade: true # 自动更新 package.json
+target: minor # 只升级到次要版本，避免破坏性变更 (Supported version targets are: latest, newest, greatest, minor, patch, semver, and tags (e.g. @next))
+
+# 包过滤配置
+# reject: # 核心框架手动升级
+
+# 只升级这些包 (与 reject 互斥，二选一)
+# filter:
+#   - <package>
+
+# peer dependencies 处理
+peer: true # 同时检查 peer dependencies
+
+# 包管理器设置
+packageManager: pnpm
+
+# 其他选项
+interactive: false # 是否使用交互模式
+
+# 缓存设置
+cache: true # 启用缓存提升速度
+cacheExpiration: 60 # 缓存过期时间 (分钟)
+
+# 日志级别
+loglevel: info # silent, error, minimal, warn, info, verbose, silly

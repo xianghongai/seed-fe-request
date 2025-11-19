@@ -9,7 +9,7 @@ import {
 // 确保 axios 在导入库代码前被 mock
 import { createMockError, createMockResponse, mockAxiosInstance, resetAllMocks } from '../utils/mocks';
 
-describe('错误管线（Middleware/next）- 层级顺序（请求→实例→共享）', () => {
+describe('错误管道（Middleware/next）- 层级顺序（请求→实例→共享）', () => {
   beforeEach(() => {
     resetAllMocks();
     clearAllInstances();

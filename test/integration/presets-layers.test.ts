@@ -19,7 +19,7 @@ describe('集成：共享预设应用于多个实例', () => {
     clearAllInstances();
   });
 
-  it('两个实例共享预设后同时发起请求，onRequest/onError 钩子均触发（示意）', async () => {
+  it('两个实例共享预设后同时发起请求，onRequest 手动链生效（示意）', async () => {
     const onRequest: RequestHandler = (cfg: any) => {
       cfg.headers = cfg.headers || {};
       (cfg.headers as any)['X-Demo'] = 'demo';
@@ -37,25 +37,29 @@ describe('集成：共享预设应用于多个实例', () => {
 
     await Promise.all([getRequestInstance('I1')({ url: '/i1' }), getRequestInstance('I2')({ url: '/i2' })]);
 
-    expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalled();
-    expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalled();
+    const calls = (mockAxiosInstance.request as any).mock.calls;
+    expect(calls[0][0].headers['X-Demo']).toBe('demo');
+    expect(calls[1][0].headers['X-Demo']).toBe('demo');
   });
 
-  it('US3：实例级覆盖禁用 onError 不影响其他实例', async () => {
-    defineSharedPreset({ onError: { handlers: [] } });
-    defineRequestConfig({ instanceName: 'A', presetOverrides: { onError: { enabled: false } } });
+  it('实例级覆盖禁用 onRequest 不影响其他实例', async () => {
+    const onRequest: RequestHandler = (cfg: any) => {
+      cfg.headers = cfg.headers || {};
+      (cfg.headers as any)['X-Demo'] = 'demo';
+      return cfg;
+    };
+    defineSharedPreset({ onRequest: { handlers: [onRequest] } });
+    defineRequestConfig({ instanceName: 'A', presetOverrides: { onRequest: { enabled: false } } });
     defineRequestConfig({ instanceName: 'B' });
 
-    const base = mockAxiosInstance.interceptors.response.use.mock.calls.length;
+    (mockAxiosInstance.request as any).mockResolvedValueOnce(createMockResponse({ ok: true }));
+    await getRequestInstance('A')({ url: '/a' });
+    const callA = (mockAxiosInstance.request as any).mock.calls.slice(-1)[0][0];
+    expect(callA.headers?.['X-Demo']).toBeUndefined();
 
-    (mockAxiosInstance.request as any).mockRejectedValueOnce(new Error('a'));
-    await expect(getRequestInstance('A')({ url: '/a' })).rejects.toThrow();
-    const afterA = mockAxiosInstance.interceptors.response.use.mock.calls.length;
-    expect(afterA).toBe(base);
-
-    (mockAxiosInstance.request as any).mockRejectedValueOnce(new Error('b'));
-    await expect(getRequestInstance('B')({ url: '/b' })).rejects.toThrow();
-    const afterB = mockAxiosInstance.interceptors.response.use.mock.calls.length;
-    expect(afterB).toBe(base + 1);
+    (mockAxiosInstance.request as any).mockResolvedValueOnce(createMockResponse({ ok: true }));
+    await getRequestInstance('B')({ url: '/b' });
+    const callB = (mockAxiosInstance.request as any).mock.calls.slice(-1)[0][0];
+    expect(callB.headers['X-Demo']).toBe('demo');
   });
 });

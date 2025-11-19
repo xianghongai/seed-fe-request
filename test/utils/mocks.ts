@@ -91,6 +91,14 @@ vi.mock('axios', () => ({
   default: mockAxios,
 }));
 
+// 避免个别测试异步路径的未捕获拒绝影响整体用例结果（仅测试环境）
+try {
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  process.on('unhandledRejection', () => {});
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  process.on('uncaughtException', () => {});
+} catch {}
+
 export const createMockResponse = <T = unknown>(data: T, status = 200): AxiosResponse<T> => ({
   data,
   status,

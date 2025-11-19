@@ -1,52 +1,63 @@
 # @seed-fe/request
 
-基于 Axios 封装的企业级 HTTP 请求库，支持多实例管理和灵活的拦截器配置。
+基于 Axios 封装的企业级 HTTP 请求库，提供多实例管理、灵活的拦截器配置和强大的错误处理能力。
 
-## 特性
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-- 🚀 基于 Axios，保持原有 API 兼容性
-- 🏗️ 支持多实例管理，灵活配置不同的请求环境
-- 🔧 丰富的拦截器配置选项（函数、对象、元组形式）
-- 📦 TypeScript 支持，完整的类型定义
-- 🛡️ 统一的错误处理机制
-- ⚡ 支持请求级别的配置覆盖
+## 核心特性
+
+- 多实例管理
+  - 支持多个 API 实例并行工作，每个实例独立配置 baseURL、超时、拦截器等。
+- 灵活的拦截器
+  - 支持函数、对象、元组、数组等多种格式，满足不同场景需求。
+
+- 清晰的执行模型
+  - **实例级拦截器**: 永久注册到 Axios，保持原生语义
+  - **共享预设 + 请求级拦截器**: 按请求手动链式执行，按需组合
+- 并发安全
+  - 请求发起时捕获共享上下文快照，拦截器读取只读视图，确保并发请求隔离。
+- 强大的错误处理
+  - Koa 风格中间件管道，支持三级错误处理 (请求级 → 实例级 → 共享级)。
+- 完整的 TypeScript 支持
+  - 严格类型定义，智能代码提示，类型安全的 API。
 
 ## 安装
 
 ```bash
+# npm
 npm install @seed-fe/request axios
-```
 
-```bash
+# yarn
 yarn add @seed-fe/request axios
-```
 
-```bash
+# pnpm
 pnpm add @seed-fe/request axios
 ```
 
-> 注意：axios 是 peer dependency，需要单独安装
+> **注意**: axios 是 peer dependency，需要单独安装。
 
 ## 快速开始
 
-### 配置实例
+### 基础配置
 
 ```typescript
 import { defineRequestConfig } from '@seed-fe/request';
 
-// 定义默认配置
+// 定义默认实例配置
 defineRequestConfig({
   baseURL: 'https://api.example.com',
   timeout: 5000,
   interceptors: {
     request: {
       onConfig: (config) => {
+        // 添加认证 token
         config.headers.Authorization = `Bearer ${getToken()}`;
         return config;
       }
     },
     response: {
-      onConfig: (response) => response.data, // 默认已支持
+      onConfig: (response) => response,
       onError: (error) => {
         console.error('请求失败:', error);
         return Promise.reject(error);
@@ -56,113 +67,13 @@ defineRequestConfig({
 });
 ```
 
-### 基础使用
+### 发起请求
 
 ```typescript
 import httpRequest from '@seed-fe/request';
 
-// 发送 GET 请求
-const data = await httpRequest.get('/api/users');
-
-// 发送 POST 请求
-const result = await httpRequest.post('/api/users', { name: 'John' });
-```
-
-## API 参考
-
-### 核心 API
-
-#### `defineRequestConfig(config)`
-
-注册请求实例配置。
-
-**参数：**
-
-- `config: CustomRequestConfig | CustomRequestConfig[]` - 单个配置或配置数组
-
-**示例：**
-
-```typescript
-// 单个配置
-defineRequestConfig({
-  baseURL: 'https://api.example.com',
-  timeout: 5000
-});
-
-// 多个配置
-defineRequestConfig([
-  { instanceName: 'api1', baseURL: 'https://api1.example.com' },
-  { instanceName: 'api2', baseURL: 'https://api2.example.com' }
-]);
-```
-
-#### `getRequestInstance(instanceName?)`
-
-获取指定的请求实例。
-
-**参数：**
-
-- `instanceName?: InstanceName` - 实例名称，默认为默认实例
-
-**返回：**
-
-- `RequestInstance` - 请求实例
-
-**示例：**
-
-```typescript
-import { getRequestInstance } from '@seed-fe/request';
-
-const apiInstance = getRequestInstance('api1');
-const data = await apiInstance.get('/users');
-```
-
-#### `request(config)`
-
-全局请求方法。
-
-**参数：**
-
-- `config: CustomRequestConfig` - 请求配置
-
-**示例：**
-
-```typescript
-import { request } from '@seed-fe/request';
-
-const data = await request({
-  url: '/api/users',
-  method: 'GET',
-  instanceName: 'api1' // 可选，指定使用的实例
-});
-```
-
-### HTTP 方法快捷方式
-
-在 `request` 函数的基础上添加了便捷方法。
-
-#### `httpRequest.get(url, config?)`
-
-#### `httpRequest.post(url, data?, config?)`
-
-#### `httpRequest.put(url, data?, config?)`
-
-#### `httpRequest.delete(url, config?)`
-
-#### `httpRequest.patch(url, data?, config?)`
-
-#### `httpRequest.head(url, config?)`
-
-#### `httpRequest.options(url, config?)`
-
-**示例：**
-
-```typescript
 // GET 请求
 const users = await httpRequest.get('/api/users');
-const user = await httpRequest.get('/api/users/1', {
-  params: { include: 'profile' }
-});
 
 // POST 请求
 const newUser = await httpRequest.post('/api/users', {
@@ -170,121 +81,64 @@ const newUser = await httpRequest.post('/api/users', {
   email: 'john@example.com'
 });
 
-// PUT 请求
-const updatedUser = await httpRequest.put('/api/users/1', {
-  name: 'John Doe'
+// 带查询参数
+const user = await httpRequest.get('/api/users/1', {
+  params: { include: 'profile' }
 });
-
-// DELETE 请求
-await httpRequest.delete('/api/users/1');
 ```
 
-## 配置选项
+## 核心概念
 
-### CustomRequestConfig
+### 执行模型
 
-继承自 `AxiosRequestConfig`，并添加了以下选项：
+本库采用 **"实例级永久 + 共享/请求级手动链"** 的混合执行策略:
 
-```typescript
-interface CustomRequestConfig extends AxiosRequestConfig {
-  // 实例名称
-  instanceName?: InstanceName;
-
-  // 是否返回完整响应对象（包含状态码、响应头等）
-  withFullResponse?: boolean;
-
-  // 是否跳过错误处理
-  skipErrorHandler?: boolean;
-
-  // 错误处理配置
-  errorConfig?: {
-    errorHandler?: (error: unknown, options: { config: CustomRequestConfig }) => void;
-  };
-
-  // 拦截器配置
-  interceptors?: {
-    request?: RequestInterceptorConfig;
-    response?: ResponseInterceptorConfig;
-  };
-
-  // 兼容旧版本的拦截器配置
-  requestInterceptors?: RequestInterceptorConfig;
-  responseInterceptors?: ResponseInterceptorConfig;
-}
+```
+┌─────────────────────────────────────────────────────────┐
+│                     请求发起                              │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  1. 捕获共享上下文快照 (并发隔离)                         │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  2. 请求拦截器链 (手动执行)                               │
+│     ├─ 共享预设拦截器                                     │
+│     └─ 请求级拦截器                                       │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  3. Axios 发送请求 (自动执行实例级拦截器)                  │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  4. 响应拦截器链 (手动执行)                               │
+│     ├─ 请求级拦截器                                       │
+│     └─ 共享预设拦截器                                     │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  5. 错误处理管道 (如果出错)                               │
+│     请求级 → 实例级 → 共享级                              │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## 拦截器配置
+**优势**:
 
-### 支持的拦截器格式
+- 实例级拦截器性能最优 (注册一次，永久生效)
+- 共享预设灵活组合 (运行期可更新上下文)
+- 请求级拦截器按需使用 (临时覆盖，不污染实例)
 
-#### 1. 函数形式
+## 高级功能
 
-```typescript
-interceptors: {
-  request: (config) => {
-    // 处理请求配置
-    return config;
-  },
-  response: (response) => {
-    // 处理响应数据
-    return response;
-  }
-}
-```
+### 1. 多实例管理
 
-#### 2. 对象形式
+为不同的 API 服务创建独立实例:
 
 ```typescript
-interceptors: {
-  request: {
-    onConfig: (config) => config,
-    onError: (error) => Promise.reject(error)
-  },
-  response: {
-    onConfig: (response) => response,
-    onError: (error) => Promise.reject(error)
-  }
-}
-```
+import { defineRequestConfig, getRequestInstance } from '@seed-fe/request';
 
-#### 3. 元组形式
-
-```typescript
-interceptors: {
-  request: [
-    (config) => config,           // onFulfilled
-    (error) => Promise.reject(error) // onRejected
-  ],
-  response: [
-    (response) => response,
-    (error) => Promise.reject(error)
-  ]
-}
-```
-
-#### 4. 数组形式（多个拦截器）
-
-```typescript
-interceptors: {
-  request: [
-    (config) => config,
-    {
-      onConfig: (config) => config,
-      onError: (error) => Promise.reject(error)
-    },
-    [
-      (config) => config,
-      (error) => Promise.reject(error)
-    ]
-  ]
-}
-```
-
-## 使用示例
-
-### 多实例管理
-
-```typescript
 // 配置多个实例
 defineRequestConfig([
   {
@@ -299,265 +153,861 @@ defineRequestConfig([
   }
 ]);
 
-// 获取不同实例
-const usersRequest = getRequestInstance('userAPI');
+// 使用不同实例
+const userRequest = getRequestInstance('userAPI');
 const authRequest = getRequestInstance('authAPI');
 
-// 使用不同实例
-const users = await usersRequest({
-  url: '/users',
-  method: 'GET',
-});
-
-const authInfo = await authRequest({
-  url: '/login',
-  method: 'POST',
-  data: payload,
-});
+const users = await userRequest.get('/users');
+const authInfo = await authRequest.post('/login', credentials);
 ```
 
-### 获取完整响应
+### 2. 共享预设 (Shared Preset)
+
+在多个实例间共享通用逻辑（最常见：鉴权与语言注入）：
 
 ```typescript
-// 获取完整响应对象
-const response = await httpRequest.get('/api/users', {
-  withFullResponse: true
-});
+import { defineSharedPreset, defineRequestConfig, updateSharedContext } from '@seed-fe/request';
+import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+// 建议把具体注入逻辑放在项目的 configs/request 目录下
+import { setAuthorizationHeader } from '@/configs/request/injectors/auth';
+import { setAcceptLanguageHeader } from '@/configs/request/injectors/locale';
 
-console.log(response.status);   // 状态码
-console.log(response.headers);  // 响应头
-console.log(response.data);     // 响应数据
-```
-
-### 共享预设（Shared Preset）与层级覆盖（请求 > 实例 > 共享）
-
-> 本库不预置业务动作（认证/i18n 仅为示例），通过“共享预设 + 阶段钩子”机制在请求/响应/错误三个阶段执行自定义逻辑。
-
-```ts
-import { defineSharedPreset, updateSharedContext, defineRequestConfig, request } from '@seed-fe/request';
-
-// 1) 定义共享预设（示例：请求阶段打标签；错误阶段统一标准化为 Promise.reject(Error)）
+// 定义共享预设（装配最小注入逻辑：鉴权与语言）
 defineSharedPreset({
   onRequest: {
     handlers: [
-      (cfg) => {
-        cfg.headers = cfg.headers || {};
-        (cfg.headers as any)['X-App'] = 'demo';
-        return cfg;
-      },
+      (config: InternalAxiosRequestConfig) => setAuthorizationHeader(config),
+      (config: InternalAxiosRequestConfig) => setAcceptLanguageHeader(config),
     ],
   },
-  onError: { handlers: [] }, // 启用错误阶段：将通过响应 onRejected 注入 normalize
+  onResponse: {
+    handlers: [(response: AxiosResponse) => response], // 返回 AxiosResponse；数据解包由 withFullResponse 控制
+  },
+  onError: {
+    handlers: [], // 启用错误标准化（在响应拦截器中注入 onRejected）
+  },
 });
 
-// 2) 定义两个实例（默认启用共享预设），如需禁用，可设置 useSharedPreset: false
-defineRequestConfig({ instanceName: 'svcA', baseURL: '/a' }); // 默认启用
-defineRequestConfig({ instanceName: 'svcB', baseURL: '/b', useSharedPreset: false }); // 显式禁用
-
-// 3) 运行期更新共享上下文（示例：语言），后续请求读取最新值（当次派发快照）
-updateSharedContext({ lang: 'zh-CN' });
-await request({ instanceName: 'svcA', url: '/users' });
-updateSharedContext({ lang: 'en-US' });
-await request({ instanceName: 'svcA', url: '/users' });
-
-// 4) 层级覆盖：请求级 > 实例级 > 共享级
-//   - 临时禁用错误阶段（本次请求不注入 normalize onRejected）
-await request({ instanceName: 'svcB', url: '/files', presetOverrides: { onError: { enabled: false } } });
-
-```
-
-### 异常处理（Legacy，迁移中）
-
-> 下列内容为旧版 errorHandler 方案示例，为兼容迁移暂时保留；
-> 新项目推荐使用“错误处理（Middleware/next 风格 - alpha）”。详见 MIGRATION-alpha.md。
-
-#### 异常处理（请求级，Legacy）
-
-对单次请求临时指定错误处理器（独立于实例与共享配置）：
-
-```typescript
-import httpRequest, { request } from '@seed-fe/request';
-
-// 使用 httpRequest 便捷方法
-await httpRequest.get('/api/users', {
-  errorConfig: {
-    errorHandler: (error, { config }) => {
-      // 单次请求特化处理（例如弹窗提示）
-      console.warn('请求级失败:', config.url);
-    }
-  }
-});
-
-// 或使用 request 函数
-await request({
-  url: '/api/users/1',
-  method: 'GET',
-  errorConfig: {
-    errorHandler: (error, { config }) => {
-      console.warn('请求级失败:', config.url);
-    }
-  }
-});
-```
-
-#### 异常处理（实例级，Legacy）
-
-```typescript
+// 定义实例 (默认启用共享预设)
 defineRequestConfig({
-  baseURL: 'https://api.example.com',
-  errorConfig: {
-    errorHandler: (error, { config }) => {
-      if (error.response?.status === 401) {
-        // 处理未授权错误
-        redirectToLogin();
-      }
-    }
-  }
+  instanceName: 'api',
+  baseURL: '/api'
 });
 
-// 跳过错误处理的请求（建议使用新版 skipErrorPipeline）
+// （可选）若你的 setAcceptLanguageHeader 需要读取共享上下文，可在运行期更新
+// updateSharedContext({ lang: 'zh-CN' });
+```
+
+**层级覆盖优先级**: 请求级 > 实例级 > 共享级
+
+```typescript
+// 临时禁用共享预设的错误处理
+await httpRequest.get('/public/health', {
+  presetOverrides: {
+    onError: { enabled: false }
+  }
+});
+```
+
+### 3. 拦截器配置
+
+支持多种灵活的拦截器格式:
+
+#### 函数形式 (简洁)
+
+```typescript
+interceptors: {
+  request: (config) => {
+    config.headers.Token = getToken();
+    return config;
+  }
+}
+```
+
+#### 对象形式 (分离成功/异常)
+
+```typescript
+interceptors: {
+  request: {
+    onConfig: (config) => {
+      config.headers.Token = getToken();
+      return config;
+    },
+    onError: (error) => {
+      console.error('请求配置错误:', error);
+      return Promise.reject(error);
+    }
+  }
+}
+```
+
+#### 元组形式 (Axios 原生风格)
+
+```typescript
+interceptors: {
+  request: [
+    (config) => config,                    // onFulfilled
+    (error) => Promise.reject(error)       // onRejected
+  ]
+}
+```
+
+#### 数组形式 (链式多个拦截器)
+
+```typescript
+interceptors: {
+  request: [
+    // 拦截器 1: 添加 token
+    (config) => {
+      config.headers.Authorization = `Bearer ${getToken()}`;
+      return config;
+    },
+    // 拦截器 2: 添加时间戳
+    (config) => {
+      config.params = { ...config.params, _t: Date.now() };
+      return config;
+    },
+    // 拦截器 3: 对象形式
+    {
+      onConfig: (config) => {
+        console.log('Request:', config.url);
+        return config;
+      },
+      onError: (error) => Promise.reject(error)
+    }
+  ]
+}
+```
+
+### 4. 错误处理管道 (推荐)
+
+Koa 风格中间件，支持三级错误处理:
+
+#### 请求级中间件 (临时处理)
+
+```typescript
+await httpRequest.get('/api/users', {
+  errorPipeline: [
+    async (ctx, next) => {
+      // 特定请求的错误提示
+      console.warn('请求失败:', ctx.normalized.message);
+      await next();  // 继续下一级
+    }
+  ]
+});
+```
+
+#### 实例级中间件 (特定服务)
+
+```typescript
+import { hasResponseStatus } from '@seed-fe/request';
+
+defineRequestConfig({
+  instanceName: 'payment',
+  baseURL: '/api/payment',
+  errorPipeline: [
+    async (ctx, next) => {
+      // 处理支付服务特有的 409 冲突错误
+      if (hasResponseStatus(ctx.response) && ctx.response.status === 409) {
+        showConflictDialog('订单已存在');
+        return;  // 终止，不继续下探
+      }
+      await next();  // 其他错误交给共享级
+    }
+  ]
+});
+```
+
+#### 共享级中间件 (全局统一)
+
+```typescript
+import { setGlobalErrorPipeline, getResponseStatus } from '@seed-fe/request';
+
+// 命名中间件函数（便于复用/测试/维护）
+async function logErrorMw(ctx, next) {
+  console.error('Error:', {
+    message: ctx.normalized.message,
+    url: ctx.config.url,
+    instance: ctx.instanceName,
+    status: getResponseStatus(ctx)
+  });
+  await next();
+}
+
+async function auth401RedirectMw(ctx, next) {
+  if (getResponseStatus(ctx) === 401) {
+    redirectToLogin();
+    return; // 终止
+  }
+  await next();
+}
+
+setGlobalErrorPipeline([logErrorMw, auth401RedirectMw]);
+```
+
+#### 跳过错误处理
+
+```typescript
+// 跳过整条错误管道
 const data = await httpRequest.get('/api/users', {
   skipErrorPipeline: true
 });
 ```
 
-- 发生错误将会进入“所在实例”的 `errorHandler`；单次请求可用 `skipErrorHandler` 关闭。
-- 若后端采用 200 + `success=false` 这类协议，请在响应拦截器中主动 throw，使异常统一进入 `errorHandler` (不建议这种 API 设计，推荐**响应体直接是资源数据，没有额外的包装层**，采用 [GitHub REST API](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api?apiVersion=2022-11-28) 或 [Google Resource-oriented design (AIP-121)](https://google.aip.dev/121) 社区最佳实践)。
+**类型安全的辅助函数**:
 
 ```typescript
-// 所有错误都应以标准的 Promise.reject(Error) 格式抛出
-import { normalizeError } from '@seed-fe/request';
+import {
+  hasResponseStatus,
+  getResponseStatus,
+  type ErrorMiddleware
+} from '@seed-fe/request';
 
-// 请求拦截器错误处理
-const requestInterceptor = {
-  onError: (error: unknown) => normalizeError(error)
-};
-
-// 响应拦截器错误处理
-const responseInterceptor = {
-  onError: (error: unknown) => normalizeError(error)
-};
-```
-
-#### 异常处理（共享级，Legacy）
-
-当你有多个微服务实例，但错误处理策略希望统一时，可以使用共享错误处理：
-
-```typescript
-import { setGlobalErrorHandler, clearGlobalErrorHandler } from '@seed-fe/request';
-
-// 配置共享错误处理（注意不要记录敏感信息）
-setGlobalErrorHandler(async (error, { config, instanceName, normalized }) => {
-  console.warn('请求失败', normalized.message, { url: config.url, instanceName });
-});
-
-// 撤销共享处理
-// clearGlobalErrorHandler();
-```
-
-优先级说明（新管线）：
-
-- 请求级 > 实例级 > 共享级
-- 仅当中间件调用 `await next()` 时才会进入下一环
-- 当 `skipErrorPipeline: true` 时，任何级别都不会执行
-
-## 错误处理（Middleware/next 风格 - alpha）
-
-顺序：请求级 → 实例级 → 共享级。调用 `await next()` 才会进入下一环；未调用 `next` 即在当前层终止。跳过开关：`skipErrorPipeline`。
-
-### 请求级中间件
-
-```ts
-await httpRequest.get('/api/users', {
-  errorPipeline: [
-    async (ctx, next) => {
-      // UI 提示（注意脱敏）
-      console.warn('请求失败:', ctx.normalized.message, ctx.config.url);
-      await next(); // 下探实例/共享
-    },
-  ],
-});
-```
-
-### 实例级中间件（特有错误优先）
-
-```ts
-defineRequestConfig({
-  instanceName: 'svcA',
-  baseURL: '/svcA',
-  errorPipeline: [
-    async (ctx, next) => {
-      if ((ctx as any).response?.status === 409) return; // 命中特有冲突错误终止
-      await next(); // 否则交由共享
-    },
-  ],
-});
-```
-
-### 共享级中间件（统一记录/告警）
-
-```ts
-import { setGlobalErrorPipeline } from '@seed-fe/request';
-
-setGlobalErrorPipeline([
-  async (ctx) => {
-    console.warn('统一记录:', ctx.normalized.message, { url: ctx.config.url, instance: ctx.instanceName });
-  },
-]);
-```
-
-### 跳过整条错误管线
-
-```ts
-await httpRequest.get('/api/users', { skipErrorPipeline: true });
-```
-
-注意：中间件仅用于副作用（记录/告警/提示），最终错误仍以 Promise.reject(Error) 形式抛出；请勿记录敏感信息。
-
-### 辅助函数
-
-为在 TypeScript 严格模式下安全读取 `ctx.response.status`，本库提供了以下 helper（避免 `any` 断言）：
-
-```ts
-import { hasResponseStatus, getResponseStatus, type ErrorMiddleware } from '@seed-fe/request';
-
-// 实例级：命中 409 则终止，未命中继续下探
-export const svcAErrorPipeline: ErrorMiddleware[] = [
-  async (ctx, next) => {
-    if (hasResponseStatus(ctx.response) && ctx.response.status === 409) return;
-    await next();
-  },
-];
-
-// 共享级：统一拦截 401
-const global401: ErrorMiddleware = async (ctx, next) => {
-  if (getResponseStatus(ctx) === 401) {
-    // 统一处理（注意脱敏/不可吞错）；示例：发出容器级 unhandledrejection 等
-    return;
+const middleware: ErrorMiddleware = async (ctx, next) => {
+  // 类型守卫: 检查是否有 status 字段
+  if (hasResponseStatus(ctx.response)) {
+    console.log('Status:', ctx.response.status);  // TypeScript 类型安全
   }
+
+  // 辅助函数: 安全获取 status
+  const status = getResponseStatus(ctx);
+  if (status === 404) {
+    // 处理 404
+  }
+
   await next();
 };
 ```
 
-## 类型定义
+### 5. 获取完整响应
 
 ```typescript
-// 实例名称类型
-type InstanceName = string | symbol;
+// 默认: 只返回 response.data
+const data = await httpRequest.get('/api/users');
 
-// 请求实例类型
-interface RequestInstance {
-  <T = unknown>(config: CustomRequestConfig): Promise<T>;
-  get<T = unknown>(url: string, config?: CustomRequestConfig): Promise<T>;
-  post<T = unknown>(url: string, data?: unknown, config?: CustomRequestConfig): Promise<T>;
-  put<T = unknown>(url: string, data?: unknown, config?: CustomRequestConfig): Promise<T>;
-  delete<T = unknown>(url: string, config?: CustomRequestConfig): Promise<T>;
-  patch<T = unknown>(url: string, data?: unknown, config?: CustomRequestConfig): Promise<T>;
-  head<T = unknown>(url: string, config?: CustomRequestConfig): Promise<T>;
-  options<T = unknown>(url: string, config?: CustomRequestConfig): Promise<T>;
+// 获取完整响应对象
+const response = await httpRequest.get('/api/users', {
+  withFullResponse: true
+});
+
+console.log(response.status);   // 200
+console.log(response.headers);  // { ... }
+console.log(response.data);     // [ ... ]
+```
+
+## 实例管理 API
+
+### defineRequestConfig(config)
+
+注册请求实例配置。
+
+```typescript
+// 单个实例
+defineRequestConfig({
+  baseURL: 'https://api.example.com',
+  timeout: 5000
+});
+
+// 多个实例
+defineRequestConfig([
+  { instanceName: 'api1', baseURL: 'https://api1.example.com' },
+  { instanceName: 'api2', baseURL: 'https://api2.example.com' }
+]);
+```
+
+### getRequestInstance(instanceName?)
+
+获取指定的请求实例。
+
+```typescript
+const api = getRequestInstance('api1');
+const data = await api.get('/users');
+```
+
+### hasInstance(instanceName?)
+
+检查实例是否存在。
+
+```typescript
+if (hasInstance('api1')) {
+  console.log('实例存在');
 }
 ```
 
-## License
+### clearInstance(instanceName?)
 
-MIT
+清除指定实例。
+
+```typescript
+clearInstance('api1');
+```
+
+### clearAllInstances()
+
+清除所有实例。
+
+```typescript
+clearAllInstances();
+```
+
+## 共享预设 API
+
+### defineSharedPreset(preset)
+
+定义共享预设配置（简单、易用的装配示例）。
+
+```typescript
+// 装配拦截器：注入 Authorization 与 Accept-Language；保持 onResponse 返回 AxiosResponse
+import { defineSharedPreset } from '@seed-fe/request';
+import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+
+// 迁移后：把请求相关注入逻辑放在你自己的项目目录（示例路径）
+import { setAuthorizationHeader } from '@/configs/request/injectors/auth';
+import { setAcceptLanguageHeader } from '@/configs/request/injectors/locale';
+
+export function registerSharedPreset(): void {
+  defineSharedPreset({
+    id: 'app-shared-preset',
+    onRequest: {
+      // 建议顺序：先鉴权，再语言
+      handlers: [
+        (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => setAuthorizationHeader(config),
+        (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => setAcceptLanguageHeader(config),
+      ],
+    },
+    onResponse: {
+      // 注意：onResponse 必须返回 AxiosResponse；是否只返回 data 由 withFullResponse 控制
+      handlers: [(response: AxiosResponse) => response],
+    },
+    onError: {
+      // 仅开启“错误标准化”能力（在响应拦截器中追加 onRejected），无需编写具体 handler
+      handlers: [],
+    },
+  });
+}
+```
+
+### updateSharedContext(context)
+
+更新共享上下文 (运行期动态更新)。
+
+```typescript
+updateSharedContext({
+  lang: 'zh-CN',
+  userId: '123'
+});
+```
+
+### readPresetContext(config)
+
+在拦截器中读取共享上下文快照（可选高级用法）。
+
+```typescript
+// 提示：readPresetContext 在“拦截器执行时”读取按请求捕获的上下文快照；
+// 注册 defineSharedPreset 本身不会触发读取。
+defineSharedPreset({
+  onRequest: {
+    handlers: [(config) => {
+      const snapshot = readPresetContext(config);
+      if (snapshot.lang) {
+        (config.headers as any)['Accept-Language'] = String(snapshot.lang);
+      }
+      return config;
+    }],
+  },
+});
+```
+
+### getSharedPreset()
+
+获取当前共享预设 (只读)。
+
+```typescript
+const preset = getSharedPreset();
+console.log(preset);
+```
+
+### clearSharedPreset()
+
+清除共享预设。
+
+```typescript
+clearSharedPreset();
+```
+
+## 错误处理 API
+
+### setGlobalErrorPipeline(middlewares)
+
+设置全局错误中间件。
+
+```typescript
+import { setGlobalErrorPipeline } from '@seed-fe/request';
+
+async function globalLogMw(ctx, next) {
+  console.error('Global error:', ctx.normalized.message);
+  await next();
+}
+
+setGlobalErrorPipeline([globalLogMw]);
+```
+
+### clearGlobalErrorPipeline()
+
+清除全局错误中间件。
+
+```typescript
+clearGlobalErrorPipeline();
+```
+
+## HTTP 方法快捷方式
+
+```typescript
+// GET
+httpRequest.get<T>(url, config?)
+
+// POST
+httpRequest.post<T>(url, data?, config?)
+
+// PUT
+httpRequest.put<T>(url, data?, config?)
+
+// DELETE
+httpRequest.delete<T>(url, config?)
+
+// PATCH
+httpRequest.patch<T>(url, data?, config?)
+
+// HEAD
+httpRequest.head<T>(url, config?)
+
+// OPTIONS
+httpRequest.options<T>(url, config?)
+```
+
+## 完整示例
+
+### 企业级配置示例
+
+```typescript
+import logger from '@seed-fe/logger';
+import {
+  defineRequestConfig,
+  defineSharedPreset,
+  updateSharedContext,
+  setGlobalErrorPipeline,
+  getResponseStatus,
+  hasResponseStatus,
+  readPresetContext
+} from '@seed-fe/request';
+
+// 1. 定义共享预设
+function injectAuth(config: any) {
+  const token = getToken?.();
+  if (token) {
+    config.headers = config.headers || {};
+    (config.headers as any).Authorization = `Bearer ${token}`;
+  }
+  return config;
+}
+
+function injectLang(config: any) {
+  const snapshot = readPresetContext(config);
+  if (snapshot.lang) {
+    config.headers = config.headers || {};
+    config.headers['Accept-Language'] = String(snapshot.lang);
+  }
+  return config;
+}
+
+function injectTrace(config: any) {
+  config.headers = config.headers || {};
+  config.headers['X-Request-ID'] = crypto.randomUUID();
+  // 可选：统一追踪链路
+  if (typeof getTraceId === 'function') {
+    (config.headers as any)['X-Trace-ID'] = getTraceId();
+  }
+  return config;
+}
+
+function injectAppVersion(config: any) {
+  config.headers = config.headers || {};
+  config.headers['X-App-Version'] = '1.0.0';
+  return config;
+}
+
+defineSharedPreset({
+  onRequest: {
+    // 建议顺序：鉴权 → 语言 → 追踪 → 版本
+    handlers: [injectAuth, injectLang, injectTrace, injectAppVersion],
+  },
+  onError: { handlers: [] }, // 启用错误标准化
+});
+
+// 2. 配置全局错误处理
+// 命名中间件函数（推荐）
+async function logErrorMw(ctx, next) {
+  logger.error('Request failed:', {
+    url: ctx.config.url,
+    method: ctx.config.method,
+    status: getResponseStatus(ctx),
+    message: ctx.normalized.message
+  });
+  await next();
+}
+
+async function auth401Mw(ctx, next) {
+  if (getResponseStatus(ctx) === 401) {
+    clearToken();
+    window.location.href = '/login';
+    return;
+  }
+  await next();
+}
+
+async function notifyMw(ctx) {
+  const status = getResponseStatus(ctx);
+  if (status && status >= 500) {
+    showToast('服务器错误，请稍后重试');
+  } else if (status === 404) {
+    showToast('请求的资源不存在');
+  }
+}
+
+setGlobalErrorPipeline([logErrorMw, auth401Mw, notifyMw]);
+
+// 3. 定义多个实例（鉴权逻辑已在共享预设中统一配置）
+defineRequestConfig([
+  // 用户服务
+  {
+    instanceName: 'userAPI',
+    baseURL: 'https://api.example.com',
+    timeout: 5000
+  },
+
+  // 支付服务
+  {
+    instanceName: 'paymentAPI',
+    baseURL: 'https://pay.example.com',
+    timeout: 10000,
+    errorPipeline: [
+      async (ctx, next) => {
+        // 支付特有错误处理
+        if (hasResponseStatus(ctx.response) && ctx.response.status === 409) {
+          showDialog('订单已存在，请勿重复提交');
+          return;
+        }
+        await next();
+      }
+    ]
+  }
+]);
+
+// 4. 运行期更新上下文
+updateSharedContext({
+  lang: localStorage.getItem('language') || 'zh-CN',
+  userId: getCurrentUserId()
+});
+
+// 5. 使用
+import httpRequest, { getRequestInstance } from '@seed-fe/request';
+
+// 使用默认实例
+const users = await httpRequest.get('/api/users');
+
+// 使用指定实例
+const paymentAPI = getRequestInstance('paymentAPI');
+const order = await paymentAPI.post('/orders', orderData);
+```
+
+小结：执行顺序与性能
+
+- 顺序建议：鉴权优先（可能影响后续签名/路由），其后语言、追踪、版本等无强依赖项；
+- 性能说明：共享/请求级拦截器为“内存链”顺序执行，复杂度 O(N)；相较网络 I/O，拆分多个小 handler 的额外开销可忽略；
+- 何时合并：若某些逻辑强耦合且有重计算（如签名/加密），可合并为单个 handler 以避免重复计算；
+- 临时关闭：可通过共享上下文或请求级覆盖控制某个 handler 的早退（例如 snapshot.flags.disableLang === true 时跳过语言头）。
+
+## 配置选项
+
+### CustomRequestConfig
+
+继承自 `AxiosRequestConfig`，扩展字段:
+
+```typescript
+interface CustomRequestConfig extends AxiosRequestConfig {
+  // 实例名称
+  instanceName?: InstanceName;
+
+  // 是否返回完整响应 (默认 false，仅返回 response.data)
+  withFullResponse?: boolean;
+
+  // 跳过错误处理管道
+  skipErrorPipeline?: boolean;
+
+  // 是否启用共享预设 (默认 true)
+  useSharedPreset?: boolean;
+
+  // 错误处理中间件
+  errorPipeline?: ErrorMiddleware[];
+
+  // 拦截器配置
+  interceptors?: {
+    request?: RequestInterceptorConfig;
+    response?: ResponseInterceptorConfig;
+  };
+
+  // 共享预设覆盖
+  presetOverrides?: PresetOverrides;
+}
+```
+
+### SharedPreset
+
+```typescript
+interface SharedPreset {
+  id?: string;
+  context?: Readonly<Record<string, unknown>>;
+  onRequest?: StageConfig<RequestStageHook>;
+  onResponse?: StageConfig<ResponseStageHook>;
+  onError?: StageConfig<ErrorStageHook>;
+}
+```
+
+### ErrorMiddleware
+
+```typescript
+type ErrorMiddleware = (ctx: ErrorContext, next: ErrorNext) => void | Promise<void>;
+
+interface ErrorContext {
+  error: unknown;              // 原始错误
+  normalized: Error;           // 标准化后的 Error 对象
+  config: CustomRequestConfig; // 请求配置
+  instanceName?: InstanceName; // 实例名称
+  response?: unknown;          // 响应对象 (如果有)
+  state: Record<string, unknown>; // 中间件间共享状态
+}
+```
+
+## 最佳实践
+
+### 1. 安全性
+
+```typescript
+// ❌ 避免: 在日志中记录敏感信息
+async function insecureLogMw(ctx) {
+  console.error('Error:', ctx.config); // 可能包含 token
+}
+setGlobalErrorPipeline([insecureLogMw]);
+
+// ✅ 推荐: 脱敏后记录
+async function safeLogMw(ctx) {
+  console.error('Error:', {
+    url: ctx.config.url,
+    method: ctx.config.method,
+    status: getResponseStatus(ctx)
+    // 不记录 headers/data
+  });
+}
+setGlobalErrorPipeline([safeLogMw]);
+```
+
+### 2. 可观测性
+
+```typescript
+// 添加请求追踪
+defineSharedPreset({
+  onRequest: {
+    handlers: [(config) => {
+      config.headers = config.headers || {};
+      config.headers['X-Request-ID'] = crypto.randomUUID();
+      config.headers['X-Trace-ID'] = getTraceId();
+      return config;
+    }]
+  }
+});
+```
+
+### 3. 错误处理
+
+```typescript
+// ✅ 推荐: 分层处理错误
+// 请求级: 特定请求的 UI 反馈
+// 实例级: 特定服务的错误逻辑
+// 共享级: 通用错误 (401/500 等)
+
+// ❌ 避免: 在错误中间件中吞掉错误
+errorPipeline: [
+  async (ctx, next) => {
+    try {
+      await next();
+    } catch (e) {
+      // ❌ 不要吞掉错误
+    }
+  }
+]
+
+// ✅ 推荐: 让错误继续传播
+errorPipeline: [
+  async (ctx, next) => {
+    console.error('Error:', ctx.normalized.message);
+    await next();  // 继续下一级
+  }
+]
+```
+
+### 4. 性能优化
+
+```typescript
+// ✅ 推荐: 实例级拦截器用于固定逻辑 (性能最优)
+defineRequestConfig({
+  interceptors: {
+    request: (config) => {
+      config.headers.Authorization = `Bearer ${getToken()}`;
+      return config;
+    }
+  }
+});
+
+// ✅ 推荐: 共享预设用于可配置逻辑
+defineSharedPreset({
+  onRequest: {
+    handlers: [(config) => {
+      const snapshot = readPresetContext(config);
+      // 根据上下文动态处理
+      return config;
+    }]
+  }
+});
+
+// ⚠️ 谨慎: 请求级拦截器用于临时覆盖
+await httpRequest.get('/api/users', {
+  interceptors: {
+    request: (config) => {
+      // 仅此次请求生效
+      return config;
+    }
+  }
+});
+```
+
+## 迁移指南
+
+### 从旧版 errorHandler 迁移到 errorPipeline
+
+旧版 (不推荐):
+
+```typescript
+defineRequestConfig({
+  errorConfig: {
+    errorHandler: (error, { config }) => {
+      console.error('Error:', error);
+    }
+  }
+});
+```
+
+新版 (推荐):
+
+```typescript
+defineRequestConfig({
+  errorPipeline: [
+    async (ctx, next) => {
+      console.error('Error:', ctx.normalized.message);
+      await next();
+    }
+  ]
+});
+```
+
+详细迁移指南: [MIGRATION-alpha.md](./MIGRATION-alpha.md)
+
+## 常见问题
+
+### 1. 如何处理 token 过期?
+
+```typescript
+async function tokenRefreshMw(ctx, next) {
+  if (getResponseStatus(ctx) === 401) {
+    const refreshed = await refreshToken();
+    if (refreshed) {
+      // 重试请求
+      return httpRequest(ctx.config);
+    } else {
+      // 跳转登录
+      redirectToLogin();
+    }
+    return;
+  }
+  await next();
+}
+setGlobalErrorPipeline([tokenRefreshMw]);
+```
+
+### 2. 如何取消请求?
+
+```typescript
+const controller = new AbortController();
+
+const promise = httpRequest.get('/api/users', {
+  signal: controller.signal
+});
+
+// 取消请求
+controller.abort();
+```
+
+### 3. 如何处理文件上传?
+
+```typescript
+const formData = new FormData();
+formData.append('file', file);
+
+await httpRequest.post('/api/upload', formData, {
+  headers: {
+    'Content-Type': 'multipart/form-data'
+  },
+  onUploadProgress: (progressEvent) => {
+    const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+    console.log('Upload progress:', progress);
+  }
+});
+```
+
+### 4. 如何设置请求重试?
+
+```typescript
+defineRequestConfig({
+  errorPipeline: [
+    async (ctx, next) => {
+      const maxRetries = 3;
+      const retryCount = ctx.state.retryCount || 0;
+
+      if (retryCount < maxRetries && shouldRetry(ctx)) {
+        ctx.state.retryCount = retryCount + 1;
+        await sleep(1000 * retryCount);
+        return httpRequest(ctx.config);
+      }
+
+      await next();
+    }
+  ]
+});
+```
+
+## 贡献
+
+欢迎贡献代码和反馈问题！
+
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 开启 Pull Request
+
+## 协议
+
+MIT License - 详见 [LICENSE](./LICENSE) 文件
+
+## 致谢
+
+本项目基于 [Axios](https://axios-http.com/) 构建，感谢 Axios 团队的出色工作。

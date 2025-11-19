@@ -27,7 +27,7 @@ describe('共享预设（US1）', () => {
     clearAllInstances();
   });
 
-  it('多实例应用同一预设：请求阶段钩子均生效；重复应用不重复安装', async () => {
+  it('多实例应用同一预设：请求阶段钩子均生效（手动链，不注册到 axios）', async () => {
     // 定义共享预设：在请求阶段注入头部
     const onRequest: RequestHandler = (cfg: any) => {
       cfg.headers = cfg.headers || {};
@@ -44,13 +44,11 @@ describe('共享预设（US1）', () => {
     (mockAxiosInstance.request as any).mockResolvedValueOnce(createMockResponse({ ok: true }));
     (mockAxiosInstance.request as any).mockResolvedValueOnce(createMockResponse({ ok: true }));
 
-    // 分别发起请求，触发一次性拦截器注册
     await getRequestInstance('A')({ url: '/a' });
     await getRequestInstance('B')({ url: '/b' });
-
-    // 断言：请求拦截器被注册（至少一次）；重复应用不会重复注册额外拦截
-    expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalled();
-    // 无法精确计算幂等次数（一次性注册 + 初始化），此断言仅保证至少注册过一次
+    const calls = (mockAxiosInstance.request as any).mock.calls;
+    expect(calls[0][0].headers['X-Shared']).toBe('yes');
+    expect(calls[1][0].headers['X-Shared']).toBe('yes');
   });
 
   it('默认实例级启用：未调用 applyPresetToInstance 也应生效，可通过 useSharedPreset 显式关闭', async () => {
@@ -68,13 +66,13 @@ describe('共享预设（US1）', () => {
 
     (mockAxiosInstance.request as any).mockResolvedValueOnce(createMockResponse({ ok: true }));
     await getRequestInstance('A1')({ url: '/a1' });
-    const callCountAfterA = mockAxiosInstance.interceptors.request.use.mock.calls.length;
-    expect(callCountAfterA).toBeGreaterThan(0);
+    let call = (mockAxiosInstance.request as any).mock.calls.slice(-1)[0][0];
+    expect(call.headers['X-Default']).toBe('on');
 
     (mockAxiosInstance.request as any).mockResolvedValueOnce(createMockResponse({ ok: true }));
     await getRequestInstance('B1')({ url: '/b1' });
-    const callCountAfterB = mockAxiosInstance.interceptors.request.use.mock.calls.length;
-    expect(callCountAfterB).toBe(callCountAfterA); // B1 未新增注册（因禁用）
+    call = (mockAxiosInstance.request as any).mock.calls.slice(-1)[0][0];
+    expect(call.headers?.['X-Default']).toBeUndefined();
   });
 
   it('错误阶段默认以 Promise.reject(Error) 形式标准化（通过响应 onRejected 注入）', async () => {
@@ -94,7 +92,7 @@ describe('共享预设（US1）', () => {
     }
   });
 
-  it('运行期更新共享上下文：后续请求注册的 onRequest 可读取最新值（当次快照）', async () => {
+  it('运行期更新共享上下文：后续请求的 onRequest 可读取最新值（按请求快照）', async () => {
     const onRequest: RequestHandler = (cfg: any) => {
       const lang = (getSharedPreset()?.context as Record<string, unknown> | undefined)?.lang as string | undefined;
       cfg.headers = cfg.headers || {};
@@ -109,37 +107,31 @@ describe('共享预设（US1）', () => {
     updateSharedContext({ lang: 'zh-CN' });
     (mockAxiosInstance.request as any).mockResolvedValueOnce(createMockResponse({ ok: 1 }));
     await getRequestInstance('CTX')({ url: '/ctx1' });
-    const firstOnFulfilled = mockAxiosInstance.interceptors.request.use.mock.calls[0][0];
-    const cfg1 = await (firstOnFulfilled as any)({ headers: {} });
+    const cfg1 = (mockAxiosInstance.request as any).mock.calls.slice(-1)[0][0];
 
     // 2nd request with en-US（立即验证）
     updateSharedContext({ lang: 'en-US' });
     (mockAxiosInstance.request as any).mockResolvedValueOnce(createMockResponse({ ok: 2 }));
     await getRequestInstance('CTX')({ url: '/ctx2' });
-    const secondOnFulfilled = (mockAxiosInstance.interceptors.request.use.mock.calls.at(-1) as any[])[0];
-    const cfg2 = await (secondOnFulfilled as any)({ headers: {} });
+    const cfg2 = (mockAxiosInstance.request as any).mock.calls.slice(-1)[0][0];
     expect((cfg1.headers as any)['X-Lang']).toBe('zh-CN');
     expect((cfg2.headers as any)['X-Lang']).toBe('en-US');
   });
 
-  it('US3：请求级覆盖禁用 onError 阶段，不应注册响应 onRejected（与默认行为对比）', async () => {
+  it('请求级覆盖禁用 onError 阶段：不影响 axios 拦截器注册（手动链内部执行）', async () => {
     defineSharedPreset({ onError: { handlers: [] } });
     defineRequestConfig({ instanceName: 'U3' });
 
-    const baseCalls = mockAxiosInstance.interceptors.response.use.mock.calls.length;
+    const base = mockAxiosInstance.interceptors.response.use.mock.calls.length;
 
-    // 禁用 onError：本次请求不应注册 normalize onRejected
     (mockAxiosInstance.request as any).mockRejectedValueOnce(new Error('x'));
     await expect(
       getRequestInstance('U3')({ url: '/u3', presetOverrides: { onError: { enabled: false } } })
     ).rejects.toThrow();
-    const afterDisabled = mockAxiosInstance.interceptors.response.use.mock.calls.length;
-    expect(afterDisabled).toBe(baseCalls); // 无新增注册
+    expect(mockAxiosInstance.interceptors.response.use.mock.calls.length).toBe(base);
 
-    // 不禁用 onError：应新增一次响应拦截器注册
     (mockAxiosInstance.request as any).mockRejectedValueOnce(new Error('y'));
     await expect(getRequestInstance('U3')({ url: '/u3' })).rejects.toThrow();
-    const afterEnabled = mockAxiosInstance.interceptors.response.use.mock.calls.length;
-    expect(afterEnabled).toBe(baseCalls + 1);
+    expect(mockAxiosInstance.interceptors.response.use.mock.calls.length).toBe(base);
   });
 });

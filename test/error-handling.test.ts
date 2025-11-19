@@ -301,36 +301,31 @@ describe('错误处理', () => {
   });
 
   describe('内存管理', () => {
-    it('应该正确清理一次性拦截器，即使在异常情况下', async () => {
+    it('异常情况下也不应注册/弹出一次性拦截器（改为手动链执行）', async () => {
       defineRequestConfig({ baseURL: 'https://api.example.com' });
 
-      const requestId = 123;
-      const responseId = 456;
+      const baseReq = mockAxiosInstance.interceptors.request.use.mock.calls.length;
+      const baseRes = mockAxiosInstance.interceptors.response.use.mock.calls.length;
 
-      mockAxiosInstance.interceptors.request.use.mockReturnValue(requestId);
-      mockAxiosInstance.interceptors.response.use.mockReturnValue(responseId);
-
-      // 模拟请求过程中抛出异常
       mockAxiosInstance.request.mockImplementation(() => {
         throw new Error('Unexpected error');
       });
 
-      try {
-        await request({
+      await expect(
+        request({
           url: '/test',
           interceptors: {
             request: createRequestInterceptor(),
             response: createResponseInterceptor(),
           },
-          skipErrorHandler: true,
-        });
-      } catch {
-        // 忽略错误
-      }
+          skipErrorPipeline: true,
+        })
+      ).rejects.toThrow('Unexpected error');
 
-      // 即使出现异常，也应该清理拦截器
-      expect(mockAxiosInstance.interceptors.request.eject).toHaveBeenCalledWith(requestId);
-      expect(mockAxiosInstance.interceptors.response.eject).toHaveBeenCalledWith(responseId);
+      expect(mockAxiosInstance.interceptors.request.use.mock.calls.length).toBe(baseReq);
+      expect(mockAxiosInstance.interceptors.response.use.mock.calls.length).toBe(baseRes);
+      expect(mockAxiosInstance.interceptors.request.eject).not.toHaveBeenCalled();
+      expect(mockAxiosInstance.interceptors.response.eject).not.toHaveBeenCalled();
     });
   });
 

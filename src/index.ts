@@ -9,34 +9,7 @@ import {
 import type { CustomRequestConfig, HttpRequest } from './types';
 import { addHttpMethodShortcuts } from './utils/http-shortcuts';
 
-// 错误管线（共享级）API 导出
-export {
-  clearGlobalErrorHandler,
-  clearGlobalErrorPipeline,
-  // 兼容旧接口（alpha 过渡）
-  setGlobalErrorHandler,
-  setGlobalErrorPipeline,
-} from './core/global-error';
-// 导出所有类型
-export * from './types';
-// ErrorContext helpers (strict TS friendly)
-export { getResponseStatus, hasResponseStatus } from './utils/error-context';
-
-// 导出常量
-export { DEFAULT_INSTANCE_NAME };
-
-// 导出核心API
-export { defineRequestConfig, getRequestInstance };
-
-// 导出实例管理API
-export { hasInstance, clearInstance, clearAllInstances };
-
-// 共享预设 API 导出（应用开关由 useSharedPreset/presetOverrides 决定）
-export { clearSharedPreset, defineSharedPreset, getSharedPreset, updateSharedContext } from './core/shared-preset';
-// 导出工具函数
-export { normalizeError } from './utils/request-error';
-
-// 全局 request 便捷方法
+// 全局 request 方法
 export async function request<T = unknown>(config: CustomRequestConfig): Promise<T> {
   const instanceName = config.instanceName ?? DEFAULT_INSTANCE_NAME;
   const instance = getRequestInstance(instanceName);
@@ -48,4 +21,28 @@ export async function request<T = unknown>(config: CustomRequestConfig): Promise
 // 全局 request 便捷方法
 const httpRequest = addHttpMethodShortcuts(request) as HttpRequest;
 
+// 导出全局 request 便捷方法
 export default httpRequest;
+// 导出所有类型
+export * from './types';
+// 导出常量
+export { DEFAULT_INSTANCE_NAME };
+// 错误管道（共享级）API 导出
+export {
+  clearGlobalErrorHandler,
+  clearGlobalErrorPipeline,
+  // 兼容旧接口
+  setGlobalErrorHandler,
+  setGlobalErrorPipeline,
+} from './core/global-error';
+// ErrorContext helpers (strict TS friendly)
+export { getResponseStatus, hasResponseStatus } from './error/context-utils';
+// 导出实例管理API
+export { hasInstance, clearInstance, clearAllInstances };
+// 共享预设 API 导出（应用开关由 useSharedPreset/presetOverrides 决定）
+export { clearSharedPreset, defineSharedPreset, getSharedPreset, updateSharedContext } from './core/shared-preset';
+export { readPresetContext } from './utils/preset-context';
+// 导出工具函数
+export { normalizeError } from './utils/request-error';
+// 导出核心API
+export { defineRequestConfig, getRequestInstance };

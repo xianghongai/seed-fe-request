@@ -13,15 +13,17 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4.1.0
-        name: Install pnpm
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4.1.0
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
           cache: pnpm
@@ -33,8 +35,23 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Determine publish tag
+        id: tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          # 如果版本号包含 "-"，说明是 prerelease，例如 "1.2.0-beta.1"
+          if [[ "$VERSION" == *"-"* ]]; then
+            # 提取 beta/rc/alpha 等段
+            PRERELEASE_TAG=$(echo "$VERSION" | sed 's/^[0-9.]*-\([a-zA-Z0-9]*\).*$/\1/')
+            echo "tag=$PRERELEASE_TAG" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+
       - name: Publish to NPM
-        run: pnpm publish --access public --no-git-checks
+        run: pnpm publish --access public --no-git-checks --tag ${{ steps.tag.outputs.tag }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true

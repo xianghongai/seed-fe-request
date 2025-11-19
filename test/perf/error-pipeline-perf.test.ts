@@ -9,14 +9,14 @@ import {
 // mock axios first
 import { createMockError, mockAxiosInstance, resetAllMocks } from '../utils/mocks';
 
-describe('性能回归：错误管线（pipeline）额外开销', () => {
+describe('性能回归：错误管道（pipeline）额外开销', () => {
   beforeEach(() => {
     resetAllMocks();
     clearAllInstances();
     clearGlobalErrorPipeline();
   });
 
-  it('无管线 vs 三层空操作中间件，失败路径耗时处于同一数量级（≤2x）', async () => {
+  it('无管道 vs 三层空操作中间件，失败路径耗时处于同一数量级（≤2x）', async () => {
     defineRequestConfig({ instanceName: 'perf', baseURL: '/perf' });
 
     const N = 200;
