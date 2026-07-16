@@ -19,11 +19,11 @@ describe('多实例下的共享/实例级错误处理协同', () => {
 
   it('当某实例配置实例级处理时，仅该实例执行实例级，其他实例回落到共享', async () => {
     // A 实例：配置实例级处理
-    const aInstanceHandler = vi.fn();
+    const aInstanceHandler = vi.fn(async () => {});
     defineRequestConfig({
       instanceName: 'A',
       baseURL: 'https://api.example.com/a',
-      errorConfig: { errorHandler: aInstanceHandler },
+      errorPipeline: [aInstanceHandler],
     });
 
     // B 实例：无实例级处理

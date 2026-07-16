@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   RequestHandler,
-  RequestInterceptorFn,
+  RequestInterceptor,
   RequestInterceptorObject,
   ResponseHandler,
   ResponseInterceptorObject,
@@ -235,7 +235,7 @@ describe('错误处理', () => {
 
       defineRequestConfig({
         interceptors: {
-          request: [[handler] as unknown as RequestInterceptorFn],
+          request: [[handler] as unknown as RequestInterceptor],
         },
       });
 
@@ -326,33 +326,6 @@ describe('错误处理', () => {
       expect(mockAxiosInstance.interceptors.response.use.mock.calls.length).toBe(baseRes);
       expect(mockAxiosInstance.interceptors.request.eject).not.toHaveBeenCalled();
       expect(mockAxiosInstance.interceptors.response.eject).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('兼容性测试', () => {
-    it('应该同时支持新旧两种拦截器配置格式', () => {
-      // 创建符合类型的处理函数
-      const requestHandler = createRequestHandler();
-
-      // 转换为正确的类型
-      const newHandler = createRequestInterceptor();
-      const oldHandler = requestHandler as any; // 旧格式使用的是函数数组，类型系统会允许
-
-      defineRequestConfig({
-        // 新格式
-        interceptors: {
-          request: newHandler,
-        },
-        // 旧格式
-        requestInterceptors: [oldHandler],
-      });
-
-      expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledTimes(2);
-      expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function)
-      );
-      expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledWith(oldHandler);
     });
   });
 });

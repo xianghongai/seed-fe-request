@@ -36,6 +36,7 @@
  *   sharedPreset
  * );
  */
+import type { AxiosRequestConfig } from 'axios';
 import type {
   CustomRequestConfig,
   ErrorStageHook,
@@ -74,7 +75,7 @@ export function mergeConfigs(
   instanceConfig: CustomRequestConfig | undefined,
   requestConfig: CustomRequestConfig
 ): {
-  mergedConfig: CustomRequestConfig;
+  mergedConfig: AxiosRequestConfig;
   finalWithFullResponse: boolean;
 } {
   // 1. 确定最终的 withFullResponse 值 (请求级 > 实例级 > false)
@@ -83,13 +84,7 @@ export function mergeConfigs(
   // 2. 移除 withFullResponse，因为 axios 不识别这个属性
   const axiosConfig = sanitizeAxiosConfig(requestConfig);
 
-  // 3. 创建合并后的配置
-  const mergedConfig = {
-    ...axiosConfig,
-    withFullResponse: finalWithFullResponse,
-  };
-
-  return { mergedConfig, finalWithFullResponse };
+  return { mergedConfig: axiosConfig, finalWithFullResponse };
 }
 
 /**

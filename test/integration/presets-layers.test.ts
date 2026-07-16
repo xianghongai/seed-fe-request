@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearAllInstances, defineRequestConfig, defineSharedPreset, getRequestInstance } from '../../src/index';
+import {
+  clearAllInstances,
+  defineRequestConfig,
+  defineSharedPreset,
+  getRequestInstance,
+  readPresetContext,
+} from '../../src/index';
 import type { RequestHandler } from '../../src/types';
 import { createMockResponse, mockAxiosInstance, resetAllMocks } from '../utils/mocks';
 
@@ -61,5 +67,70 @@ describe('集成：共享预设应用于多个实例', () => {
     await getRequestInstance('B')({ url: '/b' });
     const callB = (mockAxiosInstance.request as any).mock.calls.slice(-1)[0][0];
     expect(callB.headers['X-Demo']).toBe('demo');
+  });
+
+  it('请求级上下文覆盖进入当前请求快照', async () => {
+    const scopes: unknown[] = [];
+    defineSharedPreset({
+      context: { scope: 'shared' },
+      onRequest: {
+        handlers: [
+          (config) => {
+            scopes.push(readPresetContext(config).scope);
+            return config;
+          },
+        ],
+      },
+    });
+    defineRequestConfig({ instanceName: 'context', presetOverrides: { context: { scope: 'instance' } } });
+    mockAxiosInstance.request.mockResolvedValue(createMockResponse({ ok: true }));
+
+    await getRequestInstance('context')({
+      url: '/context',
+      presetOverrides: { context: { scope: 'request' } },
+    });
+
+    expect(scopes).toEqual(['request']);
+  });
+
+  it('相同描述的 Symbol 实例保持各自的预设缓存', async () => {
+    const calls: string[] = [];
+    const first = Symbol('same');
+    const second = Symbol('same');
+    defineSharedPreset({ context: {} });
+    defineRequestConfig([
+      {
+        instanceName: first,
+        presetOverrides: {
+          onRequest: {
+            handlers: [
+              (config) => {
+                calls.push('first');
+                return config;
+              },
+            ],
+          },
+        },
+      },
+      {
+        instanceName: second,
+        presetOverrides: {
+          onRequest: {
+            handlers: [
+              (config) => {
+                calls.push('second');
+                return config;
+              },
+            ],
+          },
+        },
+      },
+    ]);
+    mockAxiosInstance.request.mockResolvedValue(createMockResponse({ ok: true }));
+
+    await getRequestInstance(first)({ url: '/first' });
+    await getRequestInstance(second)({ url: '/second' });
+
+    expect(calls).toEqual(['first', 'second']);
   });
 });

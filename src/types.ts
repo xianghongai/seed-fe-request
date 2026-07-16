@@ -7,20 +7,8 @@ export type ResponseStructure<T = unknown> = T;
 
 export type InstanceName = symbol | string;
 
-/**
- * 错误处理函数类型
- */
-export type ErrorHandler = (error: unknown) => unknown; // legacy, to be removed in future major
-
-/**
- * 共享错误处理的上下文信息（最小充分）
- */
-// 旧版 ErrorContext（含 cause 字段）已移除，统一使用下方新接口（error/state 字段）
-
-/**
- * 全局共享错误处理函数类型（不改变现有实例/请求级签名以保持兼容）
- */
-export type GlobalErrorHandler = (error: unknown, context: ErrorContext) => void | Promise<void>;
+/** Axios 拦截器的拒绝回调，返回值会继续进入 Axios Promise 链。 */
+export type InterceptorErrorHandler = (error: unknown) => unknown;
 
 /**
  * 请求拦截器处理函数
@@ -37,7 +25,7 @@ export type ResponseHandler = (response: AxiosResponse) => AxiosResponse | Promi
 /**
  * 拦截器对象基础接口
  */
-export interface InterceptorObjectBase<TConfig, TError = ErrorHandler> {
+export interface InterceptorObjectBase<TConfig, TError = InterceptorErrorHandler> {
   onConfig?: TConfig;
   onError?: TError;
 }
@@ -55,26 +43,22 @@ export type ResponseInterceptorObject = InterceptorObjectBase<ResponseHandler>;
 /**
  * 请求拦截器 - 函数或元组形式
  */
-export type RequestInterceptorFn = RequestHandler | [RequestHandler, ErrorHandler];
+export type RequestInterceptor = RequestHandler | [RequestHandler, InterceptorErrorHandler];
 
 /**
  * 响应拦截器 - 函数或元组形式
  */
-export type ResponseInterceptorFn = ResponseHandler | [ResponseHandler, ErrorHandler];
+export type ResponseInterceptor = ResponseHandler | [ResponseHandler, InterceptorErrorHandler];
 
 /**
  * 请求拦截器类型 - 可以是对象或函数/元组
  */
-export type AnyRequestInterceptor = RequestInterceptorObject | RequestInterceptorFn;
+export type AnyRequestInterceptor = RequestInterceptorObject | RequestInterceptor;
 
 /**
  * 响应拦截器类型 - 可以是对象或函数/元组
  */
-export type AnyResponseInterceptor = ResponseInterceptorObject | ResponseInterceptorFn;
-
-// 保持向后兼容性，使用新的类型别名
-export type RequestInterceptor = RequestInterceptorFn;
-export type ResponseInterceptor = ResponseInterceptorFn;
+export type AnyResponseInterceptor = ResponseInterceptorObject | ResponseInterceptor;
 
 /**
  * 自定义请求配置接口，扩展 AxiosRequestConfig
@@ -84,11 +68,6 @@ export type CustomRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
    * 实例名称
    */
   instanceName?: InstanceName;
-  /**
-   * 是否跳过错误处理（legacy）
-   * 说明：与 skipErrorPipeline 等价，保留兼容；新代码推荐使用 skipErrorPipeline。
-   */
-  skipErrorHandler?: boolean;
   /**
    * 跳过整条错误中间件管道
    * 说明：跳过“请求/实例/全局”三层错误管道；与共享预设 onError 无关。
@@ -108,14 +87,8 @@ export type CustomRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
    */
   errorConfig?: {
     /**
-     * 错误处理函数，用于处理错误
-     * @param error 错误
-     * @param options 选项，包含请求配置
-     */
-    errorHandler?: (error: unknown, options: { config: CustomRequestConfig }) => void;
-    /**
      * 错误抛出函数，用于抛出错误
-     * 后端自定义异常结构时主动抛错（比如 success: false 但 http 状态码还是 200），需要主动抛出错误，以供 errorHandler 处理
+     * 后端自定义异常结构时主动抛错（比如 success: false 但 HTTP 状态码仍是 200）。
      * @param response 响应数据
      */
     errorThrower?: (response: ResponseStructure<unknown>) => void;
@@ -131,21 +104,10 @@ export type CustomRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
    * 数组格式: 数组中的元素可以是函数、元组或对象
    */
   interceptors?: {
-    request?: RequestInterceptorObject | AnyRequestInterceptor[];
-    response?: ResponseInterceptorObject | AnyResponseInterceptor[];
+    request?: AnyRequestInterceptor | AnyRequestInterceptor[];
+    response?: AnyResponseInterceptor | AnyResponseInterceptor[];
   };
 
-  /**
-   * 拦截器配置,兼容 umi
-   * @deprecated 推荐使用 interceptors 代替
-   */
-  requestInterceptors?: RequestInterceptorFn[];
-
-  /**
-   * 拦截器配置,兼容 umi
-   * @deprecated 推荐使用 interceptors 代替
-   */
-  responseInterceptors?: ResponseInterceptorFn[];
   /**
    * （可选）请求级共享预设覆盖与合并策略
    */
@@ -241,7 +203,7 @@ export type PresetOverrides = Partial<{
  * 重要说明：
  * - presetOverrides.onError.enabled 仅影响“共享预设阶段”是否向响应拦截器追加一个 onRejected；
  *   它不会禁用或跳过“请求/实例/全局”的错误管道。
- * - 若要在某个请求上完全不执行错误管道（请求/实例/全局），请使用 config.skipErrorPipeline（或 legacy: skipErrorHandler）。
+ * - 若要在某个请求上完全不执行错误管道（请求/实例/全局），请使用 config.skipErrorPipeline。
  */
 
 // 统一错误合同（给调用方消费，技术无关）

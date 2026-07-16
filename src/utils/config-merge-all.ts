@@ -5,7 +5,6 @@
  * 1. 合并多层配置 (实例级 + 请求级 + 共享预设)
  * 2. 计算最终的拦截器链 (共享 + 请求级)
  * 3. 捕获共享上下文快照 (并发隔离)
- * 4. 合并错误处理管道 (请求级 → 实例级 → 共享级)
  *
  * 核心特性:
  * - 优先级: 请求级 > 实例级 > 共享级
@@ -26,7 +25,6 @@
  * ```
  * 请求拦截器: 共享预设 → 请求级
  * 响应拦截器: 请求级 → 共享预设
- * 错误管道: 请求级 → 实例级 → 共享级
  * ```
  *
  * @example
@@ -35,16 +33,15 @@
  *   axiosConfig,           // 纯 Axios 配置
  *   requestInterceptors,   // 请求拦截器 (共享 + 请求级)
  *   responseInterceptors,  // 响应拦截器 (请求级 + 共享)
- *   errorPipeline,         // 错误管道 (请求 + 实例 + 共享)
  *   withFullResponse,      // 是否返回完整响应
  *   contextSnapshot,       // 上下文快照
  * } = merged;
  */
+import type { AxiosRequestConfig } from 'axios';
 import { DEFAULT_INSTANCE_NAME } from '../constant/messages';
-import { getGlobalErrorPipeline } from '../core/global-error';
-import { captureSharedContext, getSharedContextVersion, getSharedPreset } from '../core/shared-preset';
+import { getSharedContextVersion, getSharedPreset } from '../core/shared-preset';
 import { toInterceptorArray } from '../interceptors/utils';
-import type { AnyRequestInterceptor, AnyResponseInterceptor, CustomRequestConfig, ErrorMiddleware } from '../types';
+import type { AnyRequestInterceptor, AnyResponseInterceptor, CustomRequestConfig } from '../types';
 import { mergeConfigs, mergePresetLayers } from './config-merger';
 import { computePresetInterceptors } from './preset-merger';
 
@@ -54,10 +51,9 @@ import { computePresetInterceptors } from './preset-merger';
  * 包含所有请求执行所需的信息
  */
 export interface MergedAllConfigs {
-  axiosConfig: CustomRequestConfig; // 纯 Axios 配置
+  axiosConfig: AxiosRequestConfig; // 纯 Axios 配置
   requestInterceptors: AnyRequestInterceptor[]; // 请求拦截器 (共享 + 请求级)
   responseInterceptors: AnyResponseInterceptor[]; // 响应拦截器 (请求级 + 共享)
-  errorPipeline: ErrorMiddleware[]; // 错误管道 (请求 + 实例 + 共享)
   withFullResponse: boolean; // 是否返回完整响应
   contextSnapshot: Readonly<Record<string, unknown>>; // 上下文快照
 }
@@ -71,12 +67,24 @@ export interface MergedAllConfigs {
  * - response: 缓存的响应拦截器数组
  *
  * 缓存策略:
- * - 键: `${instanceName}:${contextVersion}`
+ * - 键: InstanceName 本身，保留 Symbol 的身份语义
  * - 失效: 上下文版本变化时
  * - 启用条件: 无请求级 presetOverrides
  */
 type CachedPreset = { version: number; request: AnyRequestInterceptor[]; response: AnyResponseInterceptor[] };
-const __presetCache: Map<string, CachedPreset> = new Map();
+const presetCache = new Map<string | symbol, CachedPreset>();
+
+/**
+ * 清理指定实例或全部实例的共享预设缓存。
+ * 每个实例只保留当前版本，避免上下文更新造成历史版本持续累积。
+ */
+export function clearPresetCache(instanceName?: string | symbol): void {
+  if (instanceName === undefined) {
+    presetCache.clear();
+    return;
+  }
+  presetCache.delete(instanceName);
+}
 
 /**
  * 合并所有配置
@@ -89,7 +97,6 @@ const __presetCache: Map<string, CachedPreset> = new Map();
  * 3. 合并共享预设配置 (请求级 > 实例级 > 共享级)
  * 4. 计算拦截器链 (使用缓存优化)
  * 5. 组合请求/响应拦截器
- * 6. 扁平化错误管道
  *
  * 缓存优化:
  * - 无请求级覆盖时: 使用缓存的共享预设拦截器
@@ -128,9 +135,7 @@ export function mergeAllConfigs(
   // 1. 合并基础配置 (实例 + 请求)
   const { mergedConfig, finalWithFullResponse } = mergeConfigs(instanceConfig, requestConfig);
 
-  // 2. 捕获上下文快照 (并发隔离)
-  // 共享预设仅作为拦截器来源，不做永久注册
-  const snapshot = captureSharedContext();
+  // 2. 读取共享预设；最终快照在完成三层合并后创建。
   const shared = getSharedPreset();
 
   // 3. 判断是否启用共享预设
@@ -146,6 +151,7 @@ export function mergeAllConfigs(
   const effectivePreset = mergedStages
     ? { onRequest: mergedStages.onRequest, onResponse: mergedStages.onResponse, onError: mergedStages.onError }
     : undefined;
+  const contextSnapshot = Object.freeze({ ...(mergedStages?.context ?? {}) });
 
   // 5. 计算拦截器 (使用缓存优化)
   let presetInterceptors: { request: AnyRequestInterceptor[]; response: AnyResponseInterceptor[] } = {
@@ -154,11 +160,10 @@ export function mergeAllConfigs(
   };
 
   if (applied) {
-    const instanceName = String(requestConfig.instanceName ?? instanceConfig?.instanceName ?? DEFAULT_INSTANCE_NAME);
+    const instanceName = requestConfig.instanceName ?? instanceConfig?.instanceName ?? DEFAULT_INSTANCE_NAME;
     const ver = getSharedContextVersion();
-    const key = `${instanceName}:${ver}`;
     const canUseCache = !requestConfig.presetOverrides; // 无请求级覆盖时可用缓存
-    const cached = canUseCache ? __presetCache.get(key) : undefined;
+    const cached = canUseCache ? presetCache.get(instanceName) : undefined;
 
     if (cached && cached.version === ver) {
       // 缓存命中: 直接使用
@@ -170,7 +175,7 @@ export function mergeAllConfigs(
 
       // 更新缓存 (仅在无请求级覆盖时)
       if (canUseCache) {
-        __presetCache.set(key, { version: ver, request: computed.request, response: computed.response });
+        presetCache.set(instanceName, { version: ver, request: computed.request, response: computed.response });
       }
     }
   }
@@ -189,20 +194,12 @@ export function mergeAllConfigs(
   }
   if (presetInterceptors.response.length) responseInterceptors.push(...presetInterceptors.response);
 
-  // 8. 扁平化错误管道 (请求级 → 实例级 → 共享级)
-  const errorPipeline: ErrorMiddleware[] = [];
-  if (requestConfig.errorPipeline?.length) errorPipeline.push(...requestConfig.errorPipeline);
-  if (instanceConfig?.errorPipeline?.length) errorPipeline.push(...instanceConfig.errorPipeline);
-  const globalPipeline = getGlobalErrorPipeline();
-  if (globalPipeline?.length) errorPipeline.push(...globalPipeline);
-
-  // 9. 返回合并后的配置
+  // 8. 返回合并后的配置；错误管道由执行层按请求、实例、全局分层编排。
   return {
     axiosConfig: mergedConfig,
     requestInterceptors,
     responseInterceptors,
-    errorPipeline,
     withFullResponse: finalWithFullResponse,
-    contextSnapshot: snapshot,
+    contextSnapshot,
   };
 }

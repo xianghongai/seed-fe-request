@@ -69,7 +69,6 @@ describe('实例管理', () => {
       });
 
       expect(mockAxios.create).toHaveBeenCalledWith({
-        instanceName,
         baseURL: 'https://api.example.com',
       });
     });
@@ -111,11 +110,9 @@ describe('实例管理', () => {
 
       expect(mockAxios.create).toHaveBeenCalledTimes(2);
       expect(mockAxios.create).toHaveBeenNthCalledWith(1, {
-        instanceName: apiInstance,
         baseURL: 'https://api.example.com',
       });
       expect(mockAxios.create).toHaveBeenNthCalledWith(2, {
-        instanceName: userInstance,
         baseURL: 'https://user.example.com',
       });
     });
@@ -233,7 +230,7 @@ describe('实例管理', () => {
       defineRequestConfig(config);
 
       expect(mockAxios.create).toHaveBeenCalledTimes(1);
-      expect(mockAxios.create).toHaveBeenCalledWith(config);
+      expect(mockAxios.create).toHaveBeenCalledWith({ baseURL: 'https://api.example.com' });
     });
   });
 });

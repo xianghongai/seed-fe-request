@@ -51,6 +51,22 @@ describe('共享预设（US1）', () => {
     expect(calls[1][0].headers['X-Shared']).toBe('yes');
   });
 
+  it('定义共享预设后调用方不能原地修改嵌套上下文和处理器数组', () => {
+    const handler: RequestHandler = (config) => config;
+    const context = { scope: 'initial' };
+    const handlers = [handler];
+
+    defineSharedPreset({ context, onRequest: { handlers } });
+    context.scope = 'mutated';
+    handlers.push(handler);
+
+    const preset = getSharedPreset();
+    expect(preset?.context?.scope).toBe('initial');
+    expect(preset?.onRequest?.handlers).toHaveLength(1);
+    expect(Object.isFrozen(preset?.context)).toBe(true);
+    expect(Object.isFrozen(preset?.onRequest?.handlers)).toBe(true);
+  });
+
   it('默认实例级启用：未调用 applyPresetToInstance 也应生效，可通过 useSharedPreset 显式关闭', async () => {
     // 定义共享预设：请求阶段注入头部
     const onRequest: RequestHandler = (cfg: any) => {

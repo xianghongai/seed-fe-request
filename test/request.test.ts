@@ -258,16 +258,34 @@ describe('HTTP 方法', () => {
         url: '/test',
         interceptors: {
           response: [
-            () => {
-              throw new Error('broken');
+            {
+              onConfig: () => {
+                throw new Error('broken');
+              },
             },
-            // 恢复为一个可用响应
-            (_err) => mockResponse,
+            {
+              onConfig: (response) => response,
+              onError: () => mockResponse,
+            },
           ],
         },
       });
 
       expect(result).toEqual({ message: 'x' });
+    });
+
+    it('Axios 拒绝时请求级响应 onRejected 可以恢复', async () => {
+      const mockResponse = createMockResponse({ recovered: true });
+      mockAxiosInstance.request.mockRejectedValue(new Error('network'));
+
+      const result = await request({
+        url: '/test',
+        interceptors: {
+          response: [(response) => response, () => mockResponse],
+        },
+      });
+
+      expect(result).toEqual({ recovered: true });
     });
   });
 

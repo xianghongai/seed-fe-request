@@ -3,12 +3,10 @@
  *
  * 职责:
  * 1. 管理全局错误中间件
- * 2. 兼容旧版 errorHandler
  *
  * 特性:
  * - 内存级存储: 重新加载页面后丢失
  * - 最后设置生效: 多次调用会覆盖
- * - 向后兼容: 支持旧版 errorHandler
  *
  * @example
  * // 设置全局错误中间件
@@ -25,7 +23,7 @@
  * }
  * setGlobalErrorPipeline([logErrorMw, auth401Mw]);
  */
-import type { CustomRequestConfig, ErrorMiddleware } from '../types';
+import type { ErrorMiddleware } from '../types';
 
 /**
  * 全局错误中间件数组
@@ -33,13 +31,26 @@ import type { CustomRequestConfig, ErrorMiddleware } from '../types';
  * 按顺序执行，支持 Koa 风格的 next()
  */
 let globalErrorPipeline: ErrorMiddleware[] | undefined;
+let globalErrorPipelineOwner: symbol | undefined;
 
 /**
- * 旧版全局错误处理器 (兼容)
- *
- * @deprecated 将在 v2.0 移除，请使用 errorPipeline
+ * 一次全局错误管道注册的所有权句柄。
+ * 句柄只能清理自己仍然拥有的当前注册，避免相邻应用互相删除策略。
  */
-let legacyGlobalHandler: ((error: unknown, options: { config: CustomRequestConfig }) => void) | undefined;
+export interface GlobalErrorPipelineRegistration {
+  isActive: () => boolean;
+  dispose: () => boolean;
+}
+
+/** 仅当句柄仍拥有当前注册时清理，供 registration.dispose() 使用。 */
+function clearOwnedGlobalErrorPipeline(ownerId: symbol): boolean {
+  if (globalErrorPipelineOwner !== ownerId) {
+    return false;
+  }
+  globalErrorPipeline = undefined;
+  globalErrorPipelineOwner = undefined;
+  return true;
+}
 
 /**
  * 设置全局错误中间件
@@ -68,8 +79,15 @@ let legacyGlobalHandler: ((error: unknown, options: { config: CustomRequestConfi
  * }
  * setGlobalErrorPipeline([logMw, redirect401Mw]);
  */
-export function setGlobalErrorPipeline(middlewares: ErrorMiddleware[]): void {
+export function setGlobalErrorPipeline(middlewares: ErrorMiddleware[]): GlobalErrorPipelineRegistration {
+  const id = Symbol('seed-fe:request:global-error-pipeline');
   globalErrorPipeline = Array.isArray(middlewares) ? middlewares.slice() : [];
+  globalErrorPipelineOwner = id;
+
+  return Object.freeze({
+    isActive: () => globalErrorPipelineOwner === id,
+    dispose: () => clearOwnedGlobalErrorPipeline(id),
+  });
 }
 
 /**
@@ -77,54 +95,14 @@ export function setGlobalErrorPipeline(middlewares: ErrorMiddleware[]): void {
  */
 export function clearGlobalErrorPipeline(): void {
   globalErrorPipeline = undefined;
+  globalErrorPipelineOwner = undefined;
 }
 
 /**
  * 获取全局错误管道
  *
- * 优先返回新版 errorPipeline，否则返回兼容的旧版 handler
- *
- * @returns 中间件数组，如果都未设置则返回 undefined
+ * @returns 中间件数组，如果未设置则返回 undefined
  */
 export function getGlobalErrorPipeline(): ErrorMiddleware[] | undefined {
-  // 新版
-  if (globalErrorPipeline?.length) return globalErrorPipeline;
-
-  // 旧版兼容
-  if (legacyGlobalHandler) {
-    return [
-      (ctx) => {
-        legacyGlobalHandler?.(ctx.normalized, { config: ctx.config });
-        // 旧版语义: 不调用 next()
-      },
-    ];
-  }
-
-  return undefined;
-}
-
-/**
- * 设置全局错误处理器 (旧版兼容)
- *
- * @deprecated 将在 v2.0 移除，请使用 setGlobalErrorPipeline
- * @param handler - 错误处理函数
- *
- * @example
- * setGlobalErrorHandler((error, { config }) => {
- *   console.error('Error:', error);
- * });
- */
-export function setGlobalErrorHandler(
-  handler: (error: unknown, options: { config: CustomRequestConfig }) => void
-): void {
-  legacyGlobalHandler = handler;
-}
-
-/**
- * 清除全局错误处理器 (旧版兼容)
- *
- * @deprecated 将在 v2.0 移除
- */
-export function clearGlobalErrorHandler(): void {
-  legacyGlobalHandler = undefined;
+  return globalErrorPipeline?.length ? globalErrorPipeline : undefined;
 }

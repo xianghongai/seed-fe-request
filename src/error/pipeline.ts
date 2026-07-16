@@ -121,22 +121,10 @@ function compose(middlewares: ErrorMiddleware[]): (ctx: ErrorContext) => Promise
 }
 
 /**
- * 类型守卫: 检查是否有旧版的 skipErrorHandler 字段
- *
- * 用于向后兼容旧版 API
- *
- * @param x - 要检查的值
- * @returns 是否包含 skipErrorHandler 字段
- */
-function hasLegacySkip(x: unknown): x is { skipErrorHandler?: boolean } {
-  return typeof x === 'object' && x !== null && 'skipErrorHandler' in (x as Record<string, unknown>);
-}
-
-/**
  * 运行错误处理管道
  *
  * 核心流程:
- * 1. 检查是否跳过管道 (skipErrorPipeline 或旧版 skipErrorHandler)
+ * 1. 检查是否跳过管道
  * 2. 组合三级中间件: 请求级 → 实例级 → 共享级
  * 3. 执行中间件链 (Koa 风格)
  * 4. 始终抛出标准化错误
@@ -185,10 +173,7 @@ function hasLegacySkip(x: unknown): x is { skipErrorHandler?: boolean } {
  */
 export async function runErrorPipeline(ctx: ErrorContext, layers: LayerPipelines): Promise<void> {
   // 1. 检查是否跳过错误处理管道
-  if (
-    ctx.config.skipErrorPipeline || // 新版
-    (hasLegacySkip(ctx.config) && (ctx.config as { skipErrorHandler?: boolean }).skipErrorHandler === true) // 旧版兼容
-  ) {
+  if (ctx.config.skipErrorPipeline) {
     // 跳过管道，直接抛出标准化错误
     throw ctx.normalized;
   }

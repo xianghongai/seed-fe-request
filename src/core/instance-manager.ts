@@ -51,11 +51,11 @@ import { runErrorPipeline } from '../error/pipeline';
 import { InterceptorChain } from '../interceptors/chain';
 import { setupInstanceInterceptors } from '../interceptors/interceptor-manager';
 import { parseRequestInterceptor, parseResponseInterceptor } from '../interceptors/interceptor-parser';
-import type { CustomRequestConfig, ErrorMiddleware, InstanceName, RequestInstance } from '../types';
-import { mergeAllConfigs } from '../utils/config-merge-all';
+import type { CustomRequestConfig, InstanceName, RequestInstance } from '../types';
+import { clearPresetCache, mergeAllConfigs } from '../utils/config-merge-all';
 import { addHttpMethodShortcuts } from '../utils/http-shortcuts';
 import { attachPresetContext } from '../utils/preset-context';
-import { validateRequestConfig } from '../utils/validators';
+import { sanitizeAxiosConfig, validateRequestConfig } from '../utils/validators';
 // preset 计算在 mergeAllConfigs 内部处理
 import { getGlobalErrorPipeline } from './global-error';
 
@@ -156,6 +156,7 @@ export function clearInstance(instanceName?: InstanceName): boolean {
   if (deleted) {
     // 同时清除该实例的配置
     clearInstanceConfigs(name);
+    clearPresetCache(name);
   }
   return deleted;
 }
@@ -169,6 +170,18 @@ export function clearInstance(instanceName?: InstanceName): boolean {
 export function clearAllInstances(): void {
   instanceMap.clear();
   clearInstanceConfigs();
+  clearPresetCache();
+}
+
+/**
+ * 仅当指定实例仍是调用方持有的同一引用时清理。
+ * 适用于具有独立卸载生命周期的上层包，避免误删后来创建的同名实例。
+ */
+export function clearInstanceIfCurrent(instanceName: InstanceName, expected: RequestInstance): boolean {
+  if (instanceMap.get(instanceName) !== expected) {
+    return false;
+  }
+  return clearInstance(instanceName);
 }
 
 /**
@@ -229,19 +242,18 @@ function createEnhancedInstance(axiosInstance: AxiosInstance, instanceName: Inst
       // 执行请求链
       const finalRequestConfig = await requestChain.execute(axiosConfig as unknown as InternalAxiosRequestConfig);
 
-      // 4. 发送请求 (Axios 自动执行实例级拦截器)
-      const response = await axiosInstance.request(finalRequestConfig);
+      // 4. 响应链接收 Axios Promise，使 HTTP、网络和取消错误进入后续 onRejected。
+      const responseChain = new InterceptorChain<AxiosResponse, unknown>();
 
-      // 5. 业务异常抛出 (errorThrower)
-      // 用于处理 200 + success=false 这类协议
+      // 业务契约异常在响应拦截器之前抛出，后续 onRejected 可以按同一链处理。
       const errorThrower = config.errorConfig?.errorThrower ?? instanceConfig?.errorConfig?.errorThrower;
       if (typeof errorThrower === 'function') {
-        const respData = (response as unknown as { data: unknown }).data;
-        errorThrower(respData);
+        responseChain.use((response) => {
+          errorThrower(response.data);
+          return response;
+        });
       }
 
-      // 6. 响应拦截器链 (手动执行)
-      const responseChain = new InterceptorChain<AxiosResponse, unknown>();
       for (const itc of responseInterceptors) {
         const [onFulfilled, onRejected] = parseResponseInterceptor(itc);
         responseChain.use(
@@ -250,8 +262,7 @@ function createEnhancedInstance(axiosInstance: AxiosInstance, instanceName: Inst
         );
       }
 
-      // 执行响应链
-      const finalResponse = await responseChain.execute(response);
+      const finalResponse = await responseChain.execute(axiosInstance.request(finalRequestConfig));
 
       // 7. 返回数据
       return finalWithFullResponse
@@ -265,56 +276,16 @@ function createEnhancedInstance(axiosInstance: AxiosInstance, instanceName: Inst
       // 若需要跳过整条错误管道（包括实例/全局级），请在请求上设置 skipErrorPipeline: true。
       const ctx = createErrorContext(error, { ...config, instanceName }, instanceName);
 
-      // 8.2 构建请求级错误管道 (兼容旧 errorHandler)
+      // 8.2 读取请求级与实例级错误管道；中间件是否继续下传由 next() 决定。
       const instanceCfg = getInstanceConfig(instanceName);
-      const requestLayer: ErrorMiddleware[] | undefined = (() => {
-        const list: ErrorMiddleware[] = [];
-
-        // 新版: errorPipeline
-        if (config.errorPipeline?.length) list.push(...config.errorPipeline);
-
-        // 旧版兼容: errorConfig.errorHandler
-        const legacyRequestHandler = config.errorConfig?.errorHandler as
-          | ((error: unknown, options: { config: CustomRequestConfig }) => void)
-          | undefined;
-        if (legacyRequestHandler) {
-          list.push((ctx) => {
-            legacyRequestHandler(ctx.normalized, { config: ctx.config });
-            // 兼容旧语义：不调用 next()，在当前层终止
-          });
-        }
-
-        return list.length ? list : undefined;
-      })();
-
-      // 8.3 构建实例级错误管道
-      const instanceLayer: ErrorMiddleware[] | undefined = (() => {
-        const list: ErrorMiddleware[] = [];
-
-        if (instanceCfg?.errorPipeline?.length) list.push(...instanceCfg.errorPipeline);
-
-        const legacyInstanceHandler = instanceCfg?.errorConfig?.errorHandler as
-          | ((error: unknown, options: { config: CustomRequestConfig }) => void)
-          | undefined;
-        if (legacyInstanceHandler) {
-          list.push((ctx) => {
-            legacyInstanceHandler(ctx.normalized, { config: ctx.config });
-            // 兼容旧语义：不调用 next()，在当前层终止
-          });
-        }
-
-        return list.length ? list : undefined;
-      })();
-
-      // 8.4 运行错误管道
       const layers = {
-        request: requestLayer,
-        instance: instanceLayer,
+        request: config.errorPipeline,
+        instance: instanceCfg?.errorPipeline,
         global: getGlobalErrorPipeline(),
       } as const;
       await runErrorPipeline(ctx, layers);
 
-      // 8.5 抛出标准化错误
+      // 8.3 抛出标准化错误
       throw ctx.normalized;
     } finally {
       // 无一次性拦截器可移除
@@ -340,7 +311,7 @@ function createEnhancedInstance(axiosInstance: AxiosInstance, instanceName: Inst
  */
 export function initializeInstance(instanceName: InstanceName, config: CustomRequestConfig): void {
   // 1. 创建 Axios 实例
-  const axiosInstance = axios.create(config);
+  const axiosInstance = axios.create(sanitizeAxiosConfig(config));
 
   // 2. 添加默认响应拦截器（直接传递响应）
   axiosInstance.interceptors.response.use((response) => response);
@@ -423,20 +394,35 @@ export function defineRequestConfig(configs: CustomRequestConfig | CustomRequest
   // 统一转换为数组处理
   const configsArray = Array.isArray(configs) ? configs : [configs];
 
-  configsArray.forEach((config) => {
-    // 1. 开发期输入校验
+  const names = configsArray.map((config) => config.instanceName ?? DEFAULT_INSTANCE_NAME);
+  const seen = new Set<InstanceName>();
+
+  // 在写入任何实例前完成整组校验，避免后续配置失败留下半初始化状态。
+  configsArray.forEach((config, index) => {
     validateRequestConfig(config);
-
-    // 2. 确定实例名称
-    const instanceName = config.instanceName ?? DEFAULT_INSTANCE_NAME;
-
-    // 3. 检查是否已存在
-    if (validateInstanceName(instanceName)) return;
-
-    // 4. 保存配置
-    setInstanceConfig(instanceName, config);
-
-    // 5. 初始化实例
-    initializeInstance(instanceName, config);
+    const instanceName = names[index];
+    if (seen.has(instanceName)) {
+      throw new Error(ERROR_MESSAGES.INSTANCE_ALREADY_EXISTS(String(instanceName)));
+    }
+    seen.add(instanceName);
+    validateInstanceName(instanceName);
   });
+
+  const initializedNames: InstanceName[] = [];
+  try {
+    configsArray.forEach((config, index) => {
+      const instanceName = names[index];
+      setInstanceConfig(instanceName, config);
+      initializeInstance(instanceName, config);
+      initializedNames.push(instanceName);
+    });
+  } catch (error) {
+    initializedNames.forEach((name) => {
+      clearInstance(name);
+    });
+    names.forEach((name) => {
+      clearInstanceConfigs(name);
+    });
+    throw error;
+  }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@seed-fe/request",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "A powerful and flexible HTTP request library based on Axios",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -13,6 +13,7 @@
       "require": "./dist/index.cjs"
     }
   },
+  "sideEffects": false,
   "files": [
     "dist",
     "README.md",
@@ -20,7 +21,10 @@
   ],
   "scripts": {
     "dev": "tsup --watch",
-    "check": "biome check --write",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format:check": "biome format .",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check",
     "format": "biome format --write",
     "build": "tsup",
     "test": "vitest run",
@@ -49,13 +53,13 @@
     "url": "https://github.com/xianghongai/seed-fe-request/issues"
   },
   "homepage": "https://github.com/xianghongai/seed-fe-request#readme",
-  "packageManager": "pnpm@10.22.0",
-  "dependencies": {
-    "@seed-fe/logger": "^1.0.0"
+  "packageManager": "pnpm@11.13.0",
+  "engines": {
+    "node": ">=22.12.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.6",
-    "axios": "^1.13.2",
+    "axios": "1.17.0",
     "npm-check-updates": "^19.1.2",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
@@ -66,10 +70,5 @@
   },
   "publishConfig": {
     "access": "public"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }

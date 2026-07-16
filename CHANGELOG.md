@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.0] - 2026-07-16
+
+- 统一使用 `errorPipeline` 处理请求级、实例级和全局错误副作用。
+- 删除旧 `errorHandler`、`skipErrorHandler` 和全局错误处理器 API。
+- 删除 Umi 风格的 `requestInterceptors`、`responseInterceptors` 配置入口。
+- 收敛拦截器错误回调和拦截器类型命名，不再导出 1.x 兼容别名。
+
 ## [1.2.0-alpha.1] - 2025-09-01
 
 - 添加 `hasInstance`, `clearInstance`, `clearAllInstances` 方法进行实例管理，例如在微应用场景中，进入/离开微应用时检查/清理实例

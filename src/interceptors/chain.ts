@@ -9,8 +9,8 @@
  *
  * 执行流程:
  * 1. 按顺序执行每个处理器的 onFulfilled
- * 2. 如果抛出错误且提供了 onRejected:
- *    - 调用 onRejected 处理错误
+ * 2. 如果链进入拒绝态且后续处理器提供了 onRejected:
+ *    - 调用后续 onRejected 处理错误
  *    - 如果返回非 undefined，视为恢复，继续执行
  *    - 否则重新抛出错误
  * 3. 返回最终结果
@@ -38,8 +38,9 @@
  * // 错误恢复
  * const chain = new InterceptorChain<number>();
  * chain
+ *   .use((val) => { throw new Error('test'); })
  *   .use(
- *     (val) => { throw new Error('test'); },
+ *     (val) => val,
  *     (err) => {
  *       console.error('Recovered from:', err);
  *       return 100;  // 返回非 undefined，视为恢复
@@ -82,40 +83,32 @@ export class InterceptorChain<TValue, TError = unknown> {
    * 按顺序执行所有处理器，每个处理器接收上一个处理器的结果
    *
    * 错误处理:
-   * - 如果 onFulfilled 抛出错误且有 onRejected:
-   *   - 调用 onRejected(error)
+   * - 如果前序 Promise 或 onFulfilled 进入拒绝态:
+   *   - 交给后续处理器的 onRejected(error)
    *   - 如果返回非 undefined，视为恢复，继续执行后续处理器
    *   - 否则重新抛出错误，终止执行
    * - 如果没有 onRejected，直接抛出错误
    *
-   * @param initial - 初始值，传递给第一个处理器
+   * @param initial - 初始值或 Promise，传递给第一个处理器
    * @returns Promise<TValue> - 最后一个处理器的返回值
    * @throws 如果有未恢复的错误
    */
-  async execute(initial: TValue): Promise<TValue> {
-    let result = initial;
+  execute(initial: TValue | PromiseLike<TValue>): Promise<TValue> {
+    let result = Promise.resolve(initial) as Promise<TValue>;
 
-    // 遍历所有处理器，按序执行
-    for (const h of this.handlers) {
-      try {
-        // 执行成功处理函数
-        result = await h.onFulfilled(result);
-      } catch (err) {
-        // 如果提供了错误处理函数
-        if (h.onRejected) {
-          // 调用错误处理函数
-          const recovered = await h.onRejected(err as TError);
-
-          // 如果返回非 undefined，视为错误已恢复
-          if (recovered !== undefined) {
-            result = recovered as TValue;
-            continue; // 继续执行下一个处理器
-          }
+    // 使用 Promise 链语义，确保传输层拒绝也能进入后续错误拦截器。
+    for (const handler of this.handlers) {
+      result = result.then(handler.onFulfilled, async (error: TError) => {
+        if (!handler.onRejected) {
+          throw error;
         }
 
-        // 无恢复或未提供 onRejected，重新抛出错误
-        throw err;
-      }
+        const recovered = await handler.onRejected(error);
+        if (recovered === undefined) {
+          throw error;
+        }
+        return recovered as TValue;
+      });
     }
 
     return result;

@@ -1,11 +1,5 @@
 import { DEFAULT_INSTANCE_NAME } from './constant/messages';
-import {
-  clearAllInstances,
-  clearInstance,
-  defineRequestConfig,
-  getRequestInstance,
-  hasInstance,
-} from './core/instance-manager';
+import { defineRequestConfig, getRequestInstance } from './core/instance-manager';
 import type { CustomRequestConfig, HttpRequest } from './types';
 import { addHttpMethodShortcuts } from './utils/http-shortcuts';
 
@@ -27,20 +21,15 @@ export default httpRequest;
 export * from './types';
 // 导出常量
 export { DEFAULT_INSTANCE_NAME };
+export type { GlobalErrorPipelineRegistration } from './core/global-error';
 // 错误管道（共享级）API 导出
-export {
-  clearGlobalErrorHandler,
-  clearGlobalErrorPipeline,
-  // 兼容旧接口
-  setGlobalErrorHandler,
-  setGlobalErrorPipeline,
-} from './core/global-error';
-// ErrorContext helpers (strict TS friendly)
-export { getResponseStatus, hasResponseStatus } from './error/context-utils';
+export { clearGlobalErrorPipeline, setGlobalErrorPipeline } from './core/global-error';
 // 导出实例管理API
-export { hasInstance, clearInstance, clearAllInstances };
+export { clearAllInstances, clearInstance, clearInstanceIfCurrent, hasInstance } from './core/instance-manager';
 // 共享预设 API 导出（应用开关由 useSharedPreset/presetOverrides 决定）
 export { clearSharedPreset, defineSharedPreset, getSharedPreset, updateSharedContext } from './core/shared-preset';
+// ErrorContext helpers (strict TS friendly)
+export { getResponseStatus, hasResponseStatus } from './error/context-utils';
 export { readPresetContext } from './utils/preset-context';
 // 导出工具函数
 export { normalizeError } from './utils/request-error';

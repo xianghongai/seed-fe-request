@@ -58,11 +58,11 @@ describe('共享错误处理（全局）', () => {
 
   it('请求级处理器应覆盖实例级与共享级，仅请求级执行', async () => {
     // 实例级处理器
-    const instanceHandler = vi.fn();
+    const instanceHandler = vi.fn(async () => {});
     defineRequestConfig({
       instanceName: 'svc',
       baseURL: 'https://api.example.com',
-      errorConfig: { errorHandler: instanceHandler },
+      errorPipeline: [instanceHandler],
     });
 
     // 共享级处理器
@@ -70,23 +70,21 @@ describe('共享错误处理（全局）', () => {
     setGlobalErrorPipeline([globalHandler]);
 
     // 失败 + 请求级处理器
-    const requestHandler = vi.fn();
+    const requestHandler = vi.fn(async () => {});
     mockAxiosInstance.request.mockRejectedValueOnce(createMockError('R failed', 500));
-    await expect(
-      request({ instanceName: 'svc', url: '/r', errorConfig: { errorHandler: requestHandler } })
-    ).rejects.toThrow();
+    await expect(request({ instanceName: 'svc', url: '/r', errorPipeline: [requestHandler] })).rejects.toThrow();
 
     expect(requestHandler).toHaveBeenCalledTimes(1);
     expect(instanceHandler).not.toHaveBeenCalled();
     expect(globalHandler).not.toHaveBeenCalled();
   });
 
-  it('skipErrorHandler: true 时，三层处理器均不执行', async () => {
-    const instanceHandler = vi.fn();
+  it('skipErrorPipeline: true 时，三层处理器均不执行', async () => {
+    const instanceHandler = vi.fn(async () => {});
     defineRequestConfig({
       instanceName: 'svc2',
       baseURL: 'https://api.example.com',
-      errorConfig: { errorHandler: instanceHandler },
+      errorPipeline: [instanceHandler],
     });
 
     const globalHandler = vi.fn(async () => {});

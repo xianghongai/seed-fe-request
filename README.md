@@ -342,7 +342,10 @@ async function auth401RedirectMw(ctx, next) {
   await next();
 }
 
-setGlobalErrorPipeline([logErrorMw, auth401RedirectMw]);
+const registration = setGlobalErrorPipeline([logErrorMw, auth401RedirectMw]);
+
+// 只清理当前这次注册；若其他应用已替换全局策略，此调用不会误删新策略。
+registration.dispose();
 ```
 
 #### 跳过错误处理
@@ -442,6 +445,9 @@ if (hasInstance('api1')) {
 clearInstance('api1');
 ```
 
+具有独立卸载生命周期的封装层应保存创建时的实例引用，并使用
+`clearInstanceIfCurrent(instanceName, expectedInstance)` 条件清理，避免删除后来由其他调用方重建的同名实例。
+
 ### clearAllInstances()
 
 清除所有实例。
@@ -539,7 +545,7 @@ clearSharedPreset();
 
 ### setGlobalErrorPipeline(middlewares)
 
-设置全局错误中间件。
+设置全局错误中间件并返回所有权句柄。调用方可以用 `dispose()` 只清理自己仍然拥有的当前注册。
 
 ```typescript
 import { setGlobalErrorPipeline } from '@seed-fe/request';
@@ -889,37 +895,6 @@ await httpRequest.get('/api/users', {
   }
 });
 ```
-
-## 迁移指南
-
-### 从旧版 errorHandler 迁移到 errorPipeline
-
-旧版 (不推荐):
-
-```typescript
-defineRequestConfig({
-  errorConfig: {
-    errorHandler: (error, { config }) => {
-      console.error('Error:', error);
-    }
-  }
-});
-```
-
-新版 (推荐):
-
-```typescript
-defineRequestConfig({
-  errorPipeline: [
-    async (ctx, next) => {
-      console.error('Error:', ctx.normalized.message);
-      await next();
-    }
-  ]
-});
-```
-
-详细迁移指南: [MIGRATION-alpha.md](./MIGRATION-alpha.md)
 
 ## 常见问题
 

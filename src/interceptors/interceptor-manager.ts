@@ -3,12 +3,12 @@
  *
  * 职责:
  * 1. 将拦截器注册到 Axios 实例
- * 2. 支持多种格式的拦截器配置
+ * 2. 支持公开 interceptors 配置中的函数、对象和元组格式
  * 3. 管理拦截器 ID (用于卸载)
  * 4. 区分永久注册和一次性注册
  *
  * 核心特性:
- * - 格式兼容: 支持新旧两种配置格式
+ * - 格式统一: 所有拦截器都从 config.interceptors 注册
  * - 批量注册: 支持数组形式的拦截器
  * - ID 管理: 返回注册的拦截器 ID，便于后续卸载
  * - 一次性模式: 支持临时拦截器的自动卸载
@@ -17,12 +17,6 @@
  * ```
  * 永久注册 (isOneTime=false): 拦截器注册后一直有效
  * 一次性注册 (isOneTime=true): 收集 ID，便于请求后自动卸载
- * ```
- *
- * 配置格式兼容:
- * ```
- * 新格式: config.interceptors.request / config.interceptors.response
- * 旧格式: config.requestInterceptors / config.responseInterceptors
  * ```
  *
  * @example
@@ -146,10 +140,9 @@ function registerSingleInterceptorGroup<T extends AnyRequestInterceptor | AnyRes
  *
  * 工作流程:
  * 1. 创建请求和响应拦截器的注册函数
- * 2. 处理新格式配置 (config.interceptors.request / response)
- * 3. 处理旧格式配置 (config.requestInterceptors / responseInterceptors)
- * 4. 根据 isOneTime 决定是否收集 ID
- * 5. 返回所有注册的拦截器 ID
+ * 2. 处理 config.interceptors.request / response
+ * 3. 根据 isOneTime 决定是否收集 ID
+ * 4. 返回所有注册的拦截器 ID
  *
  * 注册模式:
  * - 永久注册 (isOneTime=false): 实例级拦截器，注册后一直有效
@@ -186,16 +179,6 @@ function registerSingleInterceptorGroup<T extends AnyRequestInterceptor | AnyRes
  * // 请求完成后卸载
  * requestIds.forEach(id => axiosInstance.interceptors.request.eject(id));
  * responseIds.forEach(id => axiosInstance.interceptors.response.eject(id));
- *
- * @example
- * // 兼容旧格式
- * setupInstanceInterceptors(
- *   instance,
- *   {
- *     requestInterceptors: [...],  // 旧格式
- *     responseInterceptors: [...]  // 旧格式
- *   }
- * );
  */
 export function setupInstanceInterceptors(
   instance: AxiosInstance,
@@ -209,7 +192,7 @@ export function setupInstanceInterceptors(
   const registerRequestInterceptor = createInterceptorRegistrar(instance, 'request');
   const registerResponseInterceptor = createInterceptorRegistrar(instance, 'response');
 
-  // 2. 处理新格式配置 (config.interceptors.request / response)
+  // 2. 处理公开的 config.interceptors.request / response 配置
   if (config.interceptors) {
     // 处理新格式请求拦截器
     if (config.interceptors.request && config.interceptors.request !== null) {
@@ -230,25 +213,6 @@ export function setupInstanceInterceptors(
         isOneTime ? responseIds : undefined
       );
     }
-  }
-
-  // 3. 处理旧格式配置 (兼容性)
-  if (config.requestInterceptors) {
-    registerSingleInterceptorGroup(
-      config.requestInterceptors,
-      parseRequestInterceptor,
-      registerRequestInterceptor,
-      isOneTime ? requestIds : undefined
-    );
-  }
-
-  if (config.responseInterceptors) {
-    registerSingleInterceptorGroup(
-      config.responseInterceptors,
-      parseResponseInterceptor,
-      registerResponseInterceptor,
-      isOneTime ? responseIds : undefined
-    );
   }
 
   return { requestIds, responseIds };

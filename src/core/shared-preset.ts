@@ -39,7 +39,7 @@
  * updateSharedContext({ lang: 'en-US' });
  * await httpRequest.get('/users');  // 使用 en-US (并发安全)
  */
-import type { SharedPreset } from '../types';
+import type { SharedPreset, StageConfig } from '../types';
 
 /**
  * 当前激活的共享预设
@@ -55,6 +55,36 @@ let currentPreset: SharedPreset | undefined;
  * 用途: 缓存失效、诊断调试
  */
 let contextVersion = 0;
+
+/**
+ * 复制并冻结阶段配置的可变容器。
+ * 处理器函数保持原身份，但数组和参数对象不能再被调用方原地修改。
+ */
+function freezeStage<T>(stage: StageConfig<T> | undefined): StageConfig<T> | undefined {
+  if (!stage) {
+    return undefined;
+  }
+
+  const handlers = Array.isArray(stage.handlers) ? Object.freeze([...stage.handlers]) : stage.handlers;
+  return Object.freeze({
+    ...stage,
+    params: stage.params ? Object.freeze({ ...stage.params }) : undefined,
+    handlers,
+  });
+}
+
+/**
+ * 创建共享预设快照，断开调用方对嵌套配置容器的可变引用。
+ */
+function freezePreset(preset: SharedPreset): SharedPreset {
+  return Object.freeze({
+    ...preset,
+    context: preset.context ? Object.freeze({ ...preset.context }) : undefined,
+    onRequest: freezeStage(preset.onRequest),
+    onResponse: freezeStage(preset.onResponse),
+    onError: freezeStage(preset.onError),
+  });
+}
 
 /**
  * 注册/替换全局共享预设
@@ -83,8 +113,7 @@ let contextVersion = 0;
  * });
  */
 export function defineSharedPreset(preset: SharedPreset): void {
-  // 冻结对象，防止外部修改
-  currentPreset = Object.freeze({ ...preset });
+  currentPreset = freezePreset(preset);
   contextVersion++;
 }
 
@@ -145,14 +174,14 @@ export function getSharedPreset(): Readonly<SharedPreset> | undefined {
 export function updateSharedContext(patch: Record<string, unknown>): void {
   if (!currentPreset) {
     // 如果预设不存在，创建一个空预设
-    currentPreset = Object.freeze({ context: { ...patch } });
+    currentPreset = freezePreset({ context: patch });
     contextVersion++;
     return;
   }
 
   // 浅合并上下文
   const prev = currentPreset.context ?? {};
-  currentPreset = Object.freeze({ ...currentPreset, context: { ...prev, ...patch } });
+  currentPreset = freezePreset({ ...currentPreset, context: { ...prev, ...patch } });
   contextVersion++;
 }
 

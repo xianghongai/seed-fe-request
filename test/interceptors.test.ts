@@ -93,22 +93,6 @@ describe('拦截器', () => {
         expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledTimes(3);
       });
     });
-
-    describe('兼容性支持（废弃的 API）', () => {
-      it('应该支持 requestInterceptors 配置', () => {
-        const handler1 = vi.fn((config) => config) as RequestHandler;
-        const handler2 = vi.fn((config) => config) as RequestHandler;
-        const errorHandler = vi.fn((error) => Promise.reject(error)) as (error: unknown) => Promise<never>;
-
-        defineRequestConfig({
-          requestInterceptors: [handler1, [handler2, errorHandler]],
-        });
-
-        expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledTimes(2);
-        expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledWith(handler1);
-        expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledWith(handler2, errorHandler);
-      });
-    });
   });
 
   describe('响应拦截器', () => {
@@ -187,23 +171,6 @@ describe('拦截器', () => {
         expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalledTimes(4);
       });
     });
-
-    describe('兼容性支持（废弃的 API）', () => {
-      it('应该支持 responseInterceptors 配置', () => {
-        const handler1 = vi.fn((response) => response) as ResponseHandler;
-        const handler2 = vi.fn((response) => response) as ResponseHandler;
-        const errorHandler = vi.fn((error) => Promise.reject(error)) as (error: unknown) => Promise<never>;
-
-        defineRequestConfig({
-          responseInterceptors: [handler1, [handler2, errorHandler]],
-        });
-
-        // +1 是因为会自动添加默认响应拦截器
-        expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalledTimes(3);
-        expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalledWith(handler1);
-        expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalledWith(handler2, errorHandler);
-      });
-    });
   });
 
   describe('混合拦截器配置', () => {
@@ -220,28 +187,6 @@ describe('拦截器', () => {
 
       expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledWith(requestHandler);
       expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalledWith(responseHandler);
-    });
-
-    it('应该支持新旧配置格式混合使用', () => {
-      const newRequestHandler = vi.fn((config) => config) as RequestHandler;
-      const oldRequestHandler = vi.fn((config) => config) as RequestHandler;
-      const newResponseHandler = vi.fn((response) => response) as ResponseHandler;
-      const oldResponseHandler = vi.fn((response) => response) as ResponseHandler;
-
-      defineRequestConfig({
-        // 新格式
-        interceptors: {
-          request: { onConfig: newRequestHandler },
-          response: { onConfig: newResponseHandler },
-        },
-        // 旧格式（兼容性）
-        requestInterceptors: [oldRequestHandler],
-        responseInterceptors: [oldResponseHandler],
-      });
-
-      // 新格式和旧格式的拦截器都应该被添加
-      expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalledTimes(2);
-      expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalledTimes(3); // +1 默认拦截器
     });
   });
 

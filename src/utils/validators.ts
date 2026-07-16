@@ -34,6 +34,7 @@
  *   const { onConfig, onError } = interceptor;
  * }
  */
+import type { AxiosRequestConfig } from 'axios';
 import type { CustomRequestConfig } from '../types';
 
 /**
@@ -84,8 +85,7 @@ export function resolveWithFullResponse(
  *
  * 移除 Axios 不识别的自定义字段，防止传递给 Axios 时报错
  *
- * 自定义字段包括:
- * - withFullResponse: 本库的响应格式控制字段
+ * 所有请求层自定义字段都会被剥离，只把 Axios 原生配置交给 adapter。
  *
  * @param config - 包含自定义字段的配置
  * @returns 纯 Axios 配置
@@ -101,8 +101,18 @@ export function resolveWithFullResponse(
  * // axiosConfig = { url: '/api/users', timeout: 5000 }
  * // withFullResponse 已被移除
  */
-export function sanitizeAxiosConfig(config: CustomRequestConfig): CustomRequestConfig {
-  const { withFullResponse: _, ...axiosConfig } = config;
+export function sanitizeAxiosConfig(config: CustomRequestConfig): AxiosRequestConfig {
+  const {
+    errorConfig: _errorConfig,
+    errorPipeline: _errorPipeline,
+    instanceName: _instanceName,
+    interceptors: _interceptors,
+    presetOverrides: _presetOverrides,
+    skipErrorPipeline: _skipErrorPipeline,
+    useSharedPreset: _useSharedPreset,
+    withFullResponse: _withFullResponse,
+    ...axiosConfig
+  } = config;
   return axiosConfig;
 }
 

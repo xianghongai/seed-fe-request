@@ -18,10 +18,11 @@ describe('InterceptorChain', () => {
     const chain = new InterceptorChain<number, unknown>();
     chain
       .use((v) => v + 1)
+      .use((_v) => {
+        throw new Error('boom');
+      })
       .use(
-        (_v) => {
-          throw new Error('boom');
-        },
+        (v) => v,
         (_err) => 42
       )
       .use((v) => v + 1);
@@ -29,6 +30,18 @@ describe('InterceptorChain', () => {
     const out = await chain.execute(1);
     // 第2步抛错后由 onRejected 恢复为 42，继续 +1 → 43
     expect(out).toBe(43);
+  });
+
+  it('初始 Promise 拒绝时进入第一个 onRejected', async () => {
+    const chain = new InterceptorChain<number, unknown>();
+    chain
+      .use(
+        (v) => v,
+        () => 41
+      )
+      .use((v) => v + 1);
+
+    await expect(chain.execute(Promise.reject(new Error('transport')))).resolves.toBe(42);
   });
 
   it('onRejected 未恢复则应抛出', async () => {

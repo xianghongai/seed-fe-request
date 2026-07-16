@@ -1,0 +1,10 @@
+[tools]
+node = "24"
+
+[hooks]
+# 启用 Corepack 后，将安装 package.json 中 packageManager 指定的 pnpm
+# 也可以改为由 mise 直接安装 pnpm
+postinstall = 'npx corepack enable'
+
+[settings]
+experimental = true
